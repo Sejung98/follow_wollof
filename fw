@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# follow_wollof launcher for macOS / Linux / Git Bash (Windows cmd/PowerShell: fw.cmd). See `fw help`.
+if command -v python3 >/dev/null 2>&1 && python3 -c "" >/dev/null 2>&1; then PY=(python3)
+elif command -v python >/dev/null 2>&1; then PY=(python)
+else PY=(py -3); fi
+SELF="$("${PY[@]}" -c 'import os,sys;print(os.path.realpath(sys.argv[1]))' "${BASH_SOURCE[0]}")"
+exec "${PY[@]}" "$(dirname "$SELF")/fw.py" "$@"
