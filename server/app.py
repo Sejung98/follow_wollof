@@ -182,8 +182,7 @@ def pid_file(port):
 
 def write_pid(port):
     PID_FILE = pid_file(port)
-    if not os.path.isdir(config.STATE_DIR):
-        os.makedirs(config.STATE_DIR)
+    config.ensure_state_dir()
     with open(PID_FILE, "w") as fh:
         fh.write(str(os.getpid()))
 

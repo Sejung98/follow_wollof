@@ -60,10 +60,16 @@ def say(msg):
     print(("[dry-run] " if DRY else "") + msg)
 
 
+def private(path, mode):
+    if not IS_WINDOWS and not DRY and os.path.exists(path):
+        os.chmod(path, mode)
+
+
 def backup_once(path):
     bak = path + ".bak-follow_wollof"
     if os.path.exists(path) and not os.path.exists(bak) and not DRY:
         shutil.copy2(path, bak)
+    private(bak, 0o600)   # a copy of the user's settings: owner-only even if the original is not
 
 
 def write(path, text):
@@ -154,6 +160,11 @@ def files():
 
 
 if __name__ == "__main__":
+    if not DRY and not os.path.isdir(os.path.dirname(BIN)):
+        os.makedirs(os.path.dirname(BIN))
+    private(os.path.dirname(BIN), 0o700)   # ~/.follow_wollof: plans and logs, owner-only on shared servers
+    for path in (CLAUDE_MD, SETTINGS):        # backups from earlier installs, too
+        private(path + ".bak-follow_wollof", 0o600)
     files()
     claude_md()
     settings()

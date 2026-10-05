@@ -40,6 +40,14 @@ def console_python():
     return exe
 
 
+def ensure_state_dir():
+    """~/.follow_wollof holds plans, logs and pid files; keep it owner-only (no-op on Windows)."""
+    if not os.path.isdir(STATE_DIR):
+        os.makedirs(STATE_DIR, mode=0o700)
+    if not IS_WINDOWS and os.stat(STATE_DIR).st_mode & 0o077:
+        os.chmod(STATE_DIR, 0o700)
+
+
 def config_path():
     return os.environ.get("FW_CONFIG") or os.path.join(ROOT, "config.ini")
 

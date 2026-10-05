@@ -130,6 +130,9 @@ def t_follow(home, env):
     r = run([FOLLOW, "show"], e)
     out = r.stdout.decode("utf-8", "replace")
     ok("show 출력 (UTF-8)", r.returncode == 0 and "▶" in out and "갈라진 단계" in out, out)
+    if not WIN:
+        mode = os.stat(os.path.join(home, ".follow_wollof")).st_mode & 0o777
+        ok("기록 폴더는 본인만 접근 (700)", mode == 0o700, oct(mode))
     ev = read_events(home, "selftest")
     ok("기록 시각에 숫자 시간대", all(re.search(r"[+-]\d\d:\d\d$", x["t"]) for x in ev), ev[0]["t"])
     g = follow.replay(ev)
@@ -199,6 +202,9 @@ def t_install(home, env):
        and sum("stop_hook.py" in c for c in cmds) == 1, cmds)
     ok("처음 설치 시 백업", os.path.exists(os.path.join(claude, "settings.json.bak-follow_wollof"))
        and os.path.exists(os.path.join(claude, "CLAUDE.md.bak-follow_wollof")))
+    if not WIN:
+        modes = [os.stat(os.path.join(claude, f)).st_mode & 0o777 for f in ("settings.json.bak-follow_wollof", "CLAUDE.md.bak-follow_wollof")]
+        ok("백업 파일은 본인만 읽기 (600)", modes == [0o600, 0o600], [oct(m) for m in modes])
     hook_cmd = [c for c in cmds if "stop_hook.py" in c][0]
     data = json.dumps({"session_id": "x", "transcript_path": "/none", "stop_hook_active": True})
     r = subprocess.run(hook_cmd, shell=True, input=data.encode(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,

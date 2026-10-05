@@ -91,8 +91,7 @@ def pythonw():
 def start(c):
     if running(c):
         return
-    if not os.path.isdir(config.STATE_DIR):
-        os.makedirs(config.STATE_DIR)
+    config.ensure_state_dir()
     log = open(LOG, "ab")
     kw = {"stdout": log, "stderr": log, "stdin": subprocess.DEVNULL, "cwd": ROOT}
     if WIN:

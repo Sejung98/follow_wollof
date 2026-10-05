@@ -135,10 +135,20 @@ def replay(events):
     return g
 
 
+def private(path):
+    """Plans can name projects and samples; on shared servers keep ~/.follow_wollof owner-only."""
+    try:
+        if os.name != "nt" and os.stat(path).st_mode & 0o077:
+            os.chmod(path, 0o700)
+    except OSError:
+        pass
+
+
 def append(event):
     d, ev = paths()
     if not os.path.isdir(d):
-        os.makedirs(d)
+        os.makedirs(d, mode=0o700)
+    private(os.path.dirname(ROOT))
     event = dict(event, t=datetime.datetime.now().astimezone().isoformat(timespec="seconds"))
     with open(ev, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(event, ensure_ascii=False) + "\n")
