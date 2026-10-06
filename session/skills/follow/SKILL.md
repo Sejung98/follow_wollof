@@ -13,6 +13,8 @@ follow_wollof 대시보드는 이 세션의 계획 그래프를 실시간으로 
    - 끝난 단계는 실행 결과로 확인된 경우에만 `done`/`next`.
    - 원래 계획에 없던 작업이 기존 단계에서 갈라져 나왔으면 `derive --from <원점> --into <합류 단계> --reason`.
    - 포기한 단계는 `drop --reason --by <대체 단계>`. 계획을 통째로 바꿨으면 `replan "이유" ...`.
+   - 다른 세션과 같은 주제를 다른 방향으로 다루는 작업이면 `follow.py topics` 로 기존 slug 를 확인하고 `follow.py topic <slug> "이 세션의 방향"`. 주제가 이미 붙어 있으면 건너뛴다.
+   - 각 단계에서 만든 보고서·PPT·PDF·Figure·결과 표가 기록에 없으면 `follow.py out <id> <파일> ...` 로 붙인다.
    - 지금 하는 단계는 정확히 하나만 `now` (병렬로 돌고 있는 것은 `side`). 막혔으면 `block`.
 3. 마지막 `show` 출력과 함께 한 줄로 답한다.
 

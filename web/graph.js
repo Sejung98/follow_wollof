@@ -1,9 +1,16 @@
 // Plan graph: replay events (same rules as replay() in session/follow.py), layout, and an
 // incrementally updated SVG view so state changes animate instead of re-rendering.
 
+export const STALE_MS = 2 * 3600 * 1000;   // a step "in progress" with no record for this long is shown as stalled
+export const hooks = { onOut: null };     // set by the page: (sessionKey, stepId) → open that step's outputs
+export function dur(ms) {
+  const m = Math.floor(ms / 60000);
+  return m < 60 ? m + "분" : m < 1440 ? Math.floor(m / 60) + "시간" : Math.floor(m / 1440) + "일";
+}
+
 export function replayPlan(events) {
   if (!events || !events.length) return null;
-  const g = { title: null, v: 0, nodes: {}, order: [], log: [] };
+  const g = { title: null, v: 0, nodes: {}, order: [], log: [], topics: [], angle: null };
   const put = (id, title, deps, extra = {}) => {
     const n = g.nodes[id];
     if (n) {
@@ -13,11 +20,14 @@ export function replayPlan(events) {
       for (const [k, v] of Object.entries(extra)) if (v) n[k] = v;
       return;
     }
-    g.nodes[id] = { id, title: title || id, deps: [...deps], state: "left", from: null, by: null, v: g.v, ...extra };
+    g.nodes[id] = { id, title: title || id, deps: [...deps], state: "left", from: null, by: null, v: g.v, outs: [], since: null, ...extra };
     g.order.push(id);
   };
+  g.lastT = 0;
   for (const e of events) {
     const op = e.op;
+    const t = Date.parse(e.t || "") || 0;
+    if (t > g.lastT) g.lastT = t;
     if (op === "plan" || op === "replan") {
       g.v += 1;
       g.title = e.title || g.title;
@@ -33,12 +43,21 @@ export function replayPlan(events) {
       for (const t of e.into || []) if (g.nodes[t] && !g.nodes[t].deps.includes(e.id)) g.nodes[t].deps.push(e.id);
       const src = e.from ? `${g.nodes[e.from]?.title || e.from} → ` : "";
       g.log.push({ t: e.t, kind: e.from ? "derive" : "add", text: `${src}${e.title}${e.reason ? " · " + e.reason : ""}` });
+    } else if (op === "topic") {
+      for (const t of e.topics || []) if (!g.topics.includes(t)) g.topics.push(t);
+      g.angle = e.angle || g.angle;
+      g.log.push({ t: e.t, kind: "topic", text: `#${(e.topics || []).join(" #")}${e.angle ? " · " + e.angle : ""}` });
+    } else if (op === "out" && g.nodes[e.id]) {
+      const n = g.nodes[e.id];
+      for (const f of e.files || []) if (!n.outs.some(o => o.path === f.path)) n.outs.push({ ...f, t: e.t, step: e.id });
+      g.log.push({ t: e.t, kind: "out", text: `${n.title} · ${(e.files || []).map(f => f.name).join(", ")}` });
     } else if (op === "state" && g.nodes[e.id]) {
       g.nodes[e.id].state = e.state;
+      if (e.state === "now") g.nodes[e.id].since = t;
       if (e.state === "blocked") g.log.push({ t: e.t, kind: "blocked", text: `${g.nodes[e.id].title}${e.note ? " · " + e.note : ""}` });
     } else if (op === "next") {
       for (const n of Object.values(g.nodes)) if (n.state === "now") n.state = "done";
-      if (g.nodes[e.id]) g.nodes[e.id].state = "now";
+      if (g.nodes[e.id]) { g.nodes[e.id].state = "now"; g.nodes[e.id].since = t; }
     } else if (op === "drop" && g.nodes[e.id]) {
       g.nodes[e.id].state = "dropped";
       g.nodes[e.id].by = e.by || null;
@@ -50,6 +69,7 @@ export function replayPlan(events) {
   g.total = live.length;
   g.done = live.filter(n => n.state === "done").length;
   g.current = live.filter(n => n.state === "blocked").concat(live.filter(n => n.state === "now"));
+  g.outs = g.order.flatMap(id => g.nodes[id].outs);
   return g;
 }
 
@@ -127,6 +147,12 @@ export class GraphView {
     host.appendChild(this.tip);
     this.svg.addEventListener("pointerover", e => this.showTip(e.target.closest(".n"), host));
     this.svg.addEventListener("pointerleave", () => this.tip.classList.remove("on"));
+    this.svg.addEventListener("click", e => {
+      const b = e.target.closest(".ob");
+      if (!b || !this.ctx) return;
+      e.stopPropagation();
+      hooks.onOut?.(this.ctx.key, b.closest(".n").dataset.id);
+    });
   }
 
   showTip(nodeEl, host) {
@@ -139,6 +165,8 @@ export class GraphView {
     if (n.by) extra.push(`<span class="k">대체</span>${esc(g.nodes[n.by]?.title || n.by)}`);
     const deps = n.deps.filter(d => d !== n.from).map(d => g.nodes[d]?.title || d);
     if (deps.length) extra.push(`<span class="k">선행</span>${esc(deps.join(", "))}`);
+    if (n.state === "now" && n.since) extra.push(`<span class="k">시작</span>${dur(Date.now() - n.since)} 전${g.stale ? " · 정체" : ""}`);
+    if (n.outs.length) extra.push(`<span class="k">산출물</span>${esc(n.outs.map(o => o.name).join(", "))}`);
     this.tip.innerHTML = `<div class="tt">${esc(n.title)}</div>
       <div class="ts ${n.state}"><i></i>${STATE_KO[n.state] || n.state}</div>
       ${extra.map(x => `<div class="tx">${x}</div>`).join("")}`;
@@ -154,10 +182,10 @@ export class GraphView {
     const g = svgEl("g", { class: "n" }, this.gN);
     g.dataset.id = id;
     const cp = svgEl("clipPath", { id: clipId }, g);
-    svgEl("rect", { width: W, height: H, rx: H / 2 }, cp);
-    svgEl("rect", { class: "ripple", width: W, height: H, rx: H / 2 }, g);
-    svgEl("rect", { class: "halo", x: -4, y: -4, width: W + 8, height: H + 8, rx: H / 2 + 4 }, g);
-    svgEl("rect", { class: "box", width: W, height: H, rx: H / 2 }, g);
+    svgEl("rect", { width: W, height: H, rx: 3 }, cp);
+    svgEl("rect", { class: "ripple", width: W, height: H, rx: 3 }, g);
+    svgEl("rect", { class: "halo", x: -4, y: -4, width: W + 8, height: H + 8, rx: 5 }, g);
+    svgEl("rect", { class: "box", width: W, height: H, rx: 3 }, g);
     const sg = svgEl("g", { "clip-path": `url(#${clipId})` }, g);   // static clip, moving band inside
     svgEl("rect", { class: "shine", x: -60, width: 60, height: H, fill: `url(#${this.uid}-shine)` }, sg);
     const ic = svgEl("g", { class: "ic", transform: `translate(${H / 2},${H / 2})` }, g);
@@ -170,9 +198,13 @@ export class GraphView {
     svgEl("path", { class: "i-bang", d: "M0,-4 V0.6 M0,3.4 V3.6" }, ic);
     svgEl("path", { class: "i-drop", d: "M-3.5,0 H3.5" }, ic);
     const lb = svgEl("text", { class: "lb", x: H - 2, y: H / 2 }, g);
+    const ob = svgEl("g", { class: "ob", transform: `translate(${W - 22},-8)` }, g);   // outputs of this step
+    svgEl("rect", { class: "ob-bg", width: 28, height: 16, rx: 3 }, ob);
+    svgEl("path", { class: "ob-doc", d: "M5 3.5h4.2l2.6 2.6v6.4H5z M9.2 3.5v2.6h2.6" }, ob);
+    const obn = svgEl("text", { class: "ob-n", x: 15, y: 8.5 }, ob);
     g.style.animationDelay = this.first ? layerIndex * 80 + "ms" : "0ms";
     g.classList.add(this.first ? "intro" : "enter");
-    return { g, lb };
+    return { g, lb, obn, outs: 0 };
   }
 
   update(g) {
@@ -200,7 +232,13 @@ export class GraphView {
       this.prev.set(id, n.state);
       const jd = (this.justDone.get(id) || 0) > now;
       const keep = ["intro", "enter"].filter(c => v.g.classList.contains(c));
-      v.g.setAttribute("class", ["n", n.state, n.from ? "derived" : "", jd ? "jd" : "", ...keep].join(" ").trim());
+      const outs = n.outs.length;
+      const pop = !this.first && outs > v.outs;
+      v.outs = outs;
+      if (v.obn.textContent !== String(outs)) v.obn.textContent = outs;
+      v.g.setAttribute("class", ["n", n.state, n.from ? "derived" : "", jd ? "jd" : "", outs ? "has-out" : "", pop ? "out-pop" : "",
+        n.state === "now" && g.stale ? "stale" : "", ...keep].join(" ").trim());
+      if (pop) setTimeout(() => v.g.classList.remove("out-pop"), 1400);
       v.g.style.transform = `translate(${X(id)}px, ${Y(id)}px)`;
       const t = n.title.length > this.maxChars ? n.title.slice(0, this.maxChars - 1) + "…" : n.title;
       if (v.lb.textContent !== t) v.lb.textContent = t;

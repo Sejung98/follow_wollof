@@ -10,7 +10,8 @@ STATE_DIR = os.path.join(os.path.expanduser("~"), ".follow_wollof")
 IS_WINDOWS = os.name == "nt"
 
 # BatchMode: never prompt (a hung password prompt would stall the stream).
-SSH_BASE = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15",
+# ClearAllForwardings: never take over LocalForward ports a Host entry sets up for the user's own tunnels
+SSH_BASE = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "-o", "ClearAllForwardings=yes",
             "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3"]
 if not IS_WINDOWS:
     # one dedicated connection per host; shared ControlMaster sockets can hang long-lived streams.

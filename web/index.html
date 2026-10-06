@@ -11,34 +11,34 @@
 </script>
 <style>
 :root {
-  --bg: #f6f6f4; --panel: #ffffff; --ink: #17171a; --ink2: #3f3f46; --muted: #8a8a93; --faint: #c4c4c9;
-  --line: #ececea; --soft: #f0f0ed; --grid: #e7e7e3;
-  --done: #6d6af0; --now: #0ea271; --now-bg: #eaf8f2; --blocked: #e5484d; --blocked-bg: #fdeeee;
-  --derive: #e5902b; --edge: #dcdcd7; --node: #ffffff; --shine: #ffffff;
-  --done-line: #c9c8f6; --done-tint: #eeeefd; --done-flash: #dcdbfc; --walk: #bdbbf4; --now-edge: #a9ddc8; --now-track: #c6ecdc;
-  --glow: rgba(14,162,113,.28); --shadow: 0 1px 2px rgba(17,17,26,.04), 0 12px 32px -18px rgba(17,17,26,.16);
+  --bg: #F6F7F9; --panel: #FFFFFF; --ink: #1C2127; --ink2: #404854; --muted: #5F6B7C; --faint: #ABB3BF;
+  --line: #DCE0E5; --soft: #EDEFF2; --grid: #E5E8EB; --accent: #2D72D2;
+  --done: #2D72D2; --now: #238551; --now-bg: #E8F5EC; --blocked: #CD4246; --blocked-bg: #FBEBEB;
+  --derive: #C87619; --edge: #C5CBD3; --node: #FFFFFF; --shine: #FFFFFF;
+  --done-line: #A9C6F2; --done-tint: #E6EEFB; --done-flash: #CFE0F8; --walk: #9DBCEB; --now-edge: #8FCBA4; --now-track: #BFE3CB;
+  --glow: rgba(35,133,81,.22); --shadow: 0 0 0 1px rgba(17,20,24,.1), 0 1px 1px rgba(17,20,24,.2);
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
   --ease: cubic-bezier(.22,1,.36,1);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0c0c0f; --panel: #141418; --ink: #f0f0f3; --ink2: #c9c9d1; --muted: #85858f; --faint: #45454e;
-    --line: #1f1f25; --soft: #1b1b20; --grid: #1c1c22;
-    --done: #9b98ff; --now: #34d399; --now-bg: #0f2a20; --blocked: #ff6b6f; --blocked-bg: #33171a;
-    --derive: #f5a74b; --edge: #2c2c34; --node: #18181d; --shine: #b8ffe3;
-  --done-line: #3e3c78; --done-tint: #232248; --done-flash: #2f2d63; --walk: #4f4d9c; --now-edge: #1f5a45; --now-track: #1d4a3a;
-    --done-line: #3e3c78; --done-tint: #232248; --done-flash: #2f2d63; --walk: #4f4d9c; --now-edge: #1f5a45; --now-track: #1d4a3a;
-    --glow: rgba(52,211,153,.35); --shadow: 0 0 0 1px rgba(255,255,255,.015), 0 16px 40px -24px rgba(0,0,0,.8);
+  --bg: #111418; --panel: #1C2127; --ink: #F6F7F9; --ink2: #D3D8DE; --muted: #ABB3BF; --faint: #5F6B7C;
+    --line: #2F343C; --soft: #252A31; --grid: #1E2329; --accent: #4C90F0;
+    --done: #4C90F0; --now: #32A467; --now-bg: #16301F; --blocked: #E76A6E; --blocked-bg: #3A1E21;
+    --derive: #EC9A3C; --edge: #404854; --node: #252A31; --shine: #C9F2D8;
+    --done-line: #2B4E80; --done-tint: #1D3557; --done-flash: #24426E; --walk: #3A6AAE; --now-edge: #23613B; --now-track: #1F4A30;
+    --glow: rgba(50,164,103,.3); --shadow: 0 0 0 1px rgba(17,20,24,.4), 0 1px 1px rgba(17,20,24,.4);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0c0c0f; --panel: #141418; --ink: #f0f0f3; --ink2: #c9c9d1; --muted: #85858f; --faint: #45454e;
-  --line: #1f1f25; --soft: #1b1b20; --grid: #1c1c22;
-  --done: #9b98ff; --now: #34d399; --now-bg: #0f2a20; --blocked: #ff6b6f; --blocked-bg: #33171a;
-  --derive: #f5a74b; --edge: #2c2c34; --node: #18181d; --shine: #b8ffe3;
-  --done-line: #3e3c78; --done-tint: #232248; --done-flash: #2f2d63; --walk: #4f4d9c; --now-edge: #1f5a45; --now-track: #1d4a3a;
-  --glow: rgba(52,211,153,.35); --shadow: 0 0 0 1px rgba(255,255,255,.015), 0 16px 40px -24px rgba(0,0,0,.8);
+  --bg: #111418; --panel: #1C2127; --ink: #F6F7F9; --ink2: #D3D8DE; --muted: #ABB3BF; --faint: #5F6B7C;
+  --line: #2F343C; --soft: #252A31; --grid: #1E2329; --accent: #4C90F0;
+  --done: #4C90F0; --now: #32A467; --now-bg: #16301F; --blocked: #E76A6E; --blocked-bg: #3A1E21;
+  --derive: #EC9A3C; --edge: #404854; --node: #252A31; --shine: #C9F2D8;
+  --done-line: #2B4E80; --done-tint: #1D3557; --done-flash: #24426E; --walk: #3A6AAE; --now-edge: #23613B; --now-track: #1F4A30;
+  --glow: rgba(50,164,103,.3); --shadow: 0 0 0 1px rgba(17,20,24,.4), 0 1px 1px rgba(17,20,24,.4);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -50,18 +50,30 @@ body { margin: 0; background: var(--bg); color: var(--ink); display: flex; flex-
 .num { font-variant-numeric: tabular-nums; }
 
 /* header */
-header { display: flex; align-items: center; gap: 16px; height: 56px; padding: 0 22px; flex: none; }
+header { display: flex; align-items: center; gap: 18px; height: 50px; padding: 0 18px; flex: none;
+  background: var(--panel); border-bottom: 1px solid var(--line); transition: background-color .5s, border-color .5s; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14.5px; letter-spacing: -.02em; }
 .brand svg circle { transition: fill .5s; }
 .brand .m1 { fill: var(--done); } .brand .m2 { fill: var(--now); } .brand .ml { stroke: var(--faint); }
 .brand .m2 { animation: beat 2.4s var(--ease) infinite; transform-origin: 18px 7px; transform-box: view-box; }
 @keyframes beat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
-.summary { font-size: 12.5px; color: var(--muted); display: flex; gap: 14px; }
-.summary b { color: var(--ink2); font-weight: 600; }
+.summary { font-size: 12.5px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.kpi { all: unset; display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 10px; border-radius: 3px; cursor: pointer;
+  font-size: 12px; color: var(--ink2); background: var(--soft); box-shadow: inset 0 0 0 1px transparent; transition: box-shadow .2s, background .2s; }
+.kpi b { font-weight: 700; color: var(--ink); }
+.kpi i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.kpi.busy i { background: var(--now); box-shadow: 0 0 0 3px color-mix(in srgb, var(--now) 25%, transparent); }
+.kpi.waiting i { background: var(--derive); }
+.kpi.blocked i { background: var(--blocked); }
+.kpi:hover { box-shadow: inset 0 0 0 1px var(--edge); }
+.kpi.on { box-shadow: inset 0 0 0 1px var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--soft)); }
+.kpi:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.kpi.plain { cursor: default; background: none; padding: 0 6px; }
+.kpi.plain:hover { box-shadow: none; }
 .spacer { flex: 1; }
 .live { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 7px; }
-.theme { position: relative; display: flex; background: var(--soft); border-radius: 10px; padding: 3px; transition: background .5s; }
-.theme .thumb { position: absolute; top: 3px; left: 3px; width: 30px; height: 26px; border-radius: 7px;
+.theme { position: relative; display: flex; background: var(--soft); border-radius: 4px; padding: 3px; transition: background .5s; }
+.theme .thumb { position: absolute; top: 3px; left: 3px; width: 30px; height: 26px; border-radius: 3px;
   background: var(--panel); box-shadow: 0 1px 3px rgba(0,0,0,.12); transition: transform .45s var(--ease), background .5s; }
 .theme button { all: unset; position: relative; cursor: pointer; width: 30px; height: 26px; display: grid; place-items: center;
   color: var(--muted); transition: color .3s; }
@@ -80,15 +92,25 @@ header { display: flex; align-items: center; gap: 16px; height: 56px; padding: 0
 .wrap { flex: 1; display: flex; min-height: 0; }
 
 /* sidebar */
-aside { width: 264px; flex: none; overflow-y: auto; padding: 2px 10px 30px 14px; }
-.host { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; color: var(--muted);
-  letter-spacing: .07em; text-transform: uppercase; padding: 20px 10px 6px; }
+aside { width: 264px; flex: none; overflow-y: auto; overflow-x: hidden; padding: 4px 10px 30px; background: var(--panel); border-right: 1px solid var(--line);
+  transition: width .35s var(--ease), padding .35s var(--ease), opacity .25s; }
+body.nav-hidden aside { width: 0; padding-left: 0; padding-right: 0; opacity: 0; border-right-width: 0; }
+/* left-panel toggle */
+.navt { all: unset; cursor: pointer; width: 30px; height: 30px; margin-left: -6px; display: grid; place-items: center; border-radius: 3px; color: var(--muted);
+  transition: color .2s, background .2s; flex: none; }
+.navt:hover { color: var(--ink); background: var(--soft); }
+.navt:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.navt svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
+.navt .pane { fill: currentColor; stroke: none; opacity: .35; transition: transform .35s var(--ease), opacity .25s; transform-box: fill-box; transform-origin: left; }
+body.nav-hidden .navt .pane { transform: scaleX(0); opacity: 0; }
+.host { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 650; color: var(--ink2);
+  padding: 18px 10px 6px; }
 .host .err { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--blocked);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.item { position: relative; display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 9px; cursor: pointer;
+.item { position: relative; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 3px; cursor: pointer;
   font-size: 13px; color: var(--muted); transition: background .25s var(--ease), color .25s; }
 .item:hover { background: var(--soft); color: var(--ink); }
-.item.sel { background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
+.item.sel { background: var(--soft); color: var(--ink); box-shadow: inset 2px 0 0 var(--accent); }
 .item.plan { color: var(--ink2); }
 .item .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item .p { font-size: 11px; color: var(--muted); }
@@ -97,12 +119,13 @@ details summary { list-style: none; cursor: pointer; font-size: 11.5px; color: v
 details summary::-webkit-details-marker { display: none; }
 
 /* panels */
-main { position: relative; flex: 1; overflow-y: auto; padding: 4px 26px 56px 12px; min-width: 0; display: flex; flex-direction: column; }
+main { position: relative; flex: 1; overflow-y: auto; padding: 16px 22px 56px; min-width: 0; display: flex; flex-direction: column; }
 .panel, .empty { flex: none; }
-.panel { position: relative; background: var(--panel); border-radius: 18px; box-shadow: var(--shadow);
-  border: 1px solid var(--line); margin-bottom: 18px;
+.panel { position: relative; background: var(--panel); border-radius: 4px;
+  border: 1px solid var(--line); margin-bottom: 14px;
   animation: rise .7s var(--ease) both; transition: background-color .5s, border-color .5s, box-shadow .5s; }
-.panel:hover { box-shadow: var(--shadow), 0 0 0 1px var(--line); }
+.panel:hover { border-color: var(--edge); }
+.panel::before { content: ""; position: absolute; left: -1px; top: -1px; bottom: -1px; width: 3px; border-radius: 4px 0 0 4px; background: var(--hc, var(--line)); }
 @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(.99); } }
 .ph { display: flex; align-items: center; gap: 10px; padding: 16px 20px 0; cursor: pointer; user-select: none; -webkit-user-select: none; }
 .grip { width: 14px; height: 20px; margin: 0 -4px 0 -10px; display: grid; place-items: center; color: var(--faint); cursor: grab;
@@ -117,17 +140,17 @@ main { position: relative; flex: 1; overflow-y: auto; padding: 4px 26px 56px 12p
 .panel.settling { transition: transform .4s var(--ease), box-shadow .4s var(--ease) !important; }
 body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 body.is-dragging .tip { display: none; }
-.reset-order { all: unset; cursor: pointer; font-size: 12px; color: var(--muted); padding: 4px 10px; border-radius: 8px;
+.reset-order { all: unset; cursor: pointer; font-size: 12px; color: var(--muted); padding: 4px 10px; border-radius: 3px;
   background: var(--soft); transition: color .2s, background .2s; }
 .reset-order:hover { color: var(--ink); }
 .reset-order[hidden] { display: none; }
-.demo-pill { font-size: 12px; font-weight: 600; color: var(--derive); background: var(--soft); padding: 4px 11px; border-radius: 999px;
+.demo-pill { font-size: 12px; font-weight: 600; color: var(--derive); background: var(--soft); padding: 4px 11px; border-radius: 3px;
   text-decoration: none; }
 .demo-pill:hover { color: var(--ink); }
 .panel-err { padding: 4px 20px 16px; font-size: 12px; color: var(--blocked); }
 .ph .title { font-weight: 650; font-size: 15.5px; letter-spacing: -.02em; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ph .hostname { font-size: 11.5px; color: var(--muted); background: var(--soft); padding: 1px 8px; border-radius: 6px; flex: none; }
+.ph .hostname { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink2); background: var(--soft); padding: 1px 8px; border-radius: 3px; flex: none; }
 .ph .meta { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: none; font-size: 12px; color: var(--muted); }
 .ring { width: 22px; height: 22px; transform: rotate(-90deg); }
 .ring circle { fill: none; stroke-width: 2.6; }
@@ -136,7 +159,7 @@ body.is-dragging .tip { display: none; }
 .panel.finished .ring .fg { stroke: var(--now); }
 .cur { padding: 8px 20px 0; min-height: 30px; display: flex; gap: 6px; flex-wrap: wrap; }
 .chip { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; padding: 3px 11px 3px 9px;
-  border-radius: 999px; color: var(--now); background: var(--now-bg); animation: chipin .6s var(--ease) both; }
+  border-radius: 3px; color: var(--now); background: var(--now-bg); animation: chipin .6s var(--ease) both; }
 .chip i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: blink 1.6s ease-in-out infinite; }
 .chip.blocked { color: var(--blocked); background: var(--blocked-bg); }
 .chip.finished { color: var(--done); background: var(--soft); }
@@ -145,20 +168,20 @@ body.is-dragging .tip { display: none; }
 .chip.idle i { display: none; }
 @keyframes chipin { from { opacity: 0; transform: translateY(4px); filter: blur(3px); } }
 @keyframes blink { 50% { opacity: .25; } }
-.gbox { overflow-x: auto; padding: 12px 14px 16px; margin: 6px 8px 8px; border-radius: 12px; scrollbar-width: thin;
+.gbox { overflow-x: auto; padding: 12px 14px 16px; margin: 6px 8px 8px; border-radius: 3px; scrollbar-width: thin;
   background-image: radial-gradient(var(--grid) 1px, transparent 1.2px); background-size: 16px 16px; background-position: 4px 4px; }
 .log { border-top: 1px solid var(--line); padding: 12px 20px 16px; font-size: 12.5px; color: var(--muted); }
 .log div { display: flex; gap: 12px; padding: 4px 0; animation: chipin .5s var(--ease) both; }
 .log time { color: var(--faint); flex: none; }
 .log .k { flex: none; width: 40px; font-weight: 650; }
 .log .k.derive, .log .k.add { color: var(--derive); } .log .k.drop { color: var(--muted); }
-.log .k.blocked { color: var(--blocked); } .log .k.replan { color: var(--done); }
+.log .k.blocked { color: var(--blocked); } .log .k.replan, .log .k.topic { color: var(--done); }
 .empty { color: var(--muted); padding: 90px 20px; text-align: center; font-size: 13.5px; line-height: 1.9; animation: rise .7s var(--ease) both; }
-.empty code { background: var(--soft); padding: 2px 8px; border-radius: 6px; font-size: 12.5px; }
+.empty code { background: var(--soft); padding: 2px 8px; border-radius: 3px; font-size: 12.5px; }
 
 /* tooltip */
 .tip { position: absolute; z-index: 5; min-width: 180px; max-width: 250px; pointer-events: none;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 10px 12px; font-size: 12px;
   box-shadow: 0 18px 40px -16px rgba(0,0,0,.35); opacity: 0; transform: translateY(-4px) scale(.98);
   transition: opacity .2s, transform .25s var(--ease); }
 .tip.on { opacity: 1; transform: none; }
@@ -244,6 +267,348 @@ body.is-dragging .tip { display: none; }
 .n .i-drop { stroke: var(--muted); stroke-width: 1.8; }
 .n.dropped .i-drop { opacity: 1; }
 
+
+/* shared bits */
+.sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--hc, var(--faint)); flex: none; }
+.dia { display: inline-block; width: 7px; height: 7px; border: 1.5px solid var(--ink2); transform: rotate(45deg); flex: none; margin: 0 1px; }
+code { font-family: var(--mono); font-size: 11.5px; }
+.hint { font-size: 12px; color: var(--muted); margin: 4px 2px; line-height: 1.6; }
+.hint code { background: var(--soft); padding: 1px 5px; border-radius: 2px; }
+
+.ptopics { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 10px 20px 0; font-size: 12px; color: var(--muted); }
+.ptopics:empty { display: none; }
+.fd { display: inline-block; width: 11px; height: 8px; border: 1.5px solid var(--hc, var(--ink2)); border-radius: 1px 2px 2px 2px; flex: none; position: relative; margin-top: 2px; }
+.fd::before { content: ""; position: absolute; left: -1.5px; top: -4px; width: 5px; height: 2.5px; border: 1.5px solid var(--hc, var(--ink2)); border-bottom: 0; border-radius: 1px 1px 0 0; }
+.proj { display: flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 600; color: var(--muted); padding: 8px 10px 3px 14px; }
+.row.sub { padding-left: 22px; font-size: 12px; }
+.project .core { fill: color-mix(in srgb, var(--hc) 14%, var(--panel)); stroke: var(--hc); stroke-width: 1.5; }
+.project .glyph { fill: none; stroke: var(--hc); stroke-width: 1.5; stroke-linejoin: round; }
+.project.active .core { stroke-width: 2.2; }
+.lnk.owns line { stroke: var(--edge); stroke-width: 1.6; stroke-opacity: .9; }
+.lg-proj { display: inline-block; flex: none; width: 12px; height: 9px; border: 1.5px solid var(--ink2); border-radius: 2px; }
+.ptopics .pn { margin-right: 6px; }
+.ptopics .pa { color: var(--ink2); }
+.ptopics .pa::before { content: "방향 "; color: var(--muted); }
+
+/* view tabs */
+.tabs { position: relative; display: flex; align-self: stretch; gap: 4px; }
+.tabs button { all: unset; cursor: pointer; padding: 0 12px; font-size: 13px; font-weight: 600; color: var(--muted); display: flex; align-items: center; transition: color .2s; }
+.tabs button:hover, .tabs button.on { color: var(--ink); }
+.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -6px; border-radius: 3px; }
+.tabs .bar { position: absolute; bottom: -1px; height: 3px; background: var(--accent); transition: left .35s var(--ease), width .35s var(--ease); }
+body[data-view="onto"] .wrap, body[data-view="onto"] #reset-order { display: none !important; }
+body[data-view="sessions"] #onto { display: none; }
+
+/* ontology layout */
+#onto { --navw: 248px; flex: 1; min-height: 0; display: grid; grid-template-columns: var(--navw) minmax(0, 1fr); transition: grid-template-columns .35s var(--ease); }
+#onto.has-insp { grid-template-columns: var(--navw) minmax(0, 1fr) 380px; }
+body.nav-hidden #onto { --navw: 0px; }
+body.nav-hidden #onto .ox { opacity: 0; visibility: hidden; padding-left: 0; padding-right: 0; border-right-width: 0; }
+.ox { overflow-y: auto; overflow-x: hidden; min-width: 0; padding: 12px 12px 30px; background: var(--panel); border-right: 1px solid var(--line);
+  transition: opacity .25s, visibility .35s, padding .35s var(--ease); }
+.ox h3, .insp h3 { font-size: 12px; font-weight: 650; color: var(--muted); margin: 18px 4px 6px; display: flex; gap: 6px; }
+.search { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; background: var(--soft); border-radius: 3px;
+  box-shadow: inset 0 0 0 1px var(--line); }
+.search:focus-within { box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+.search svg { width: 14px; height: 14px; fill: none; stroke: var(--muted); stroke-width: 1.6; flex: none; }
+.search input { all: unset; flex: 1; font-size: 12.5px; color: var(--ink); min-width: 0; }
+.search input::placeholder { color: var(--faint); }
+.ty { display: flex; align-items: center; gap: 9px; padding: 5px 6px; font-size: 12.5px; color: var(--ink2); }
+.ty b, .row b { margin-left: auto; font-weight: 600; color: var(--muted); font-size: 12px; }
+.row { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 9px; width: 100%; padding: 5px 6px;
+  font-size: 12.5px; color: var(--ink2); border-radius: 3px; cursor: pointer; }
+.row:hover { background: var(--soft); color: var(--ink); }
+.row:focus-visible, .srow:focus-visible, .tag:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.row .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .dot, .row .hs { margin-left: auto; }
+.row .dot + b, .row .hs + b { margin-left: 0; }
+.row .hs { display: flex; gap: 2px; }
+.tg { position: relative; display: flex; align-items: center; gap: 9px; padding: 5px 6px; font-size: 12.5px; color: var(--ink2); cursor: pointer; }
+.tg input { position: absolute; opacity: 0; }
+.tg span { width: 26px; height: 15px; border-radius: 8px; background: var(--edge); position: relative; flex: none; transition: background .2s; }
+.tg span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: #fff;
+  transition: transform .25s var(--ease); box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.tg input:checked + span { background: var(--accent); }
+.tg input:checked + span::after { transform: translateX(11px); }
+.tg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* canvas */
+.canvas { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+svg.onto { display: block; width: 100%; height: 100%; cursor: grab; user-select: none; -webkit-user-select: none; outline: none; }
+svg.onto.grabbing { cursor: grabbing; }
+/* ontology sits in space: deep sky, three star depths, the panels as glass on top */
+#onto { position: relative; isolation: isolate; }
+#onto .space { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 45% at 74% 26%, rgba(96,70,200,.30), transparent 70%),
+    radial-gradient(ellipse 45% 55% at 18% 82%, rgba(16,128,150,.24), transparent 70%),
+    radial-gradient(ellipse 35% 30% at 48% 58%, rgba(200,64,150,.10), transparent 70%),
+    radial-gradient(ellipse 120% 100% at 50% 40%, #0c1224 0%, #05070d 80%); }
+.space .st { position: absolute; inset: -40px; background-repeat: repeat; }
+.space .s1 { opacity: .75; background-position: calc(var(--px, 0) * .03px) calc(var(--py, 0) * .03px); }
+.space .s2 { opacity: .9; background-position: calc(var(--px, 0) * .08px) calc(var(--py, 0) * .08px); animation: twinkle 7s ease-in-out infinite; }
+.space .s3 { background-position: calc(var(--px, 0) * .16px) calc(var(--py, 0) * .16px); animation: twinkle 11s ease-in-out -4s infinite; }
+@keyframes twinkle { 50% { opacity: .4; } }
+.meteor { position: absolute; top: 14%; left: 78%; width: 150px; height: 1.5px; border-radius: 1px; opacity: 0;
+  background: linear-gradient(90deg, #fff, rgba(190,210,255,.5) 30%, transparent); filter: drop-shadow(0 0 4px rgba(200,220,255,.9));
+  transform: rotate(-24deg); animation: meteor 13s linear 5s infinite; }
+@keyframes meteor { 0% { opacity: 0; transform: rotate(-24deg) translateX(0); } 1% { opacity: 1; }
+  6% { opacity: 0; transform: rotate(-24deg) translateX(-560px); } 100% { opacity: 0; transform: rotate(-24deg) translateX(-560px); } }
+#onto .ox, #onto .insp { background: color-mix(in srgb, var(--panel) 40%, transparent); backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3); }
+#onto .legend, #onto .zoom { background: color-mix(in srgb, var(--panel) 45%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+#onto .search { background: color-mix(in srgb, var(--soft) 80%, transparent); }
+.session .sheen { pointer-events: none; }
+.session.ended .sheen, .session.noplan .sheen { opacity: .4; }
+#onto .host .core { filter: drop-shadow(0 0 10px color-mix(in srgb, var(--hc) 55%, transparent)); }
+#onto .project .core { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--hc) 40%, transparent)); }
+#onto .session.active .core { filter: drop-shadow(0 0 9px color-mix(in srgb, var(--hc) 75%, transparent)); }
+#onto .topic .core { filter: drop-shadow(0 0 6px rgba(200,215,255,.35)); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #onto { --bg: #060912; --panel: #0e1424; --soft: rgba(255,255,255,.06); --line: rgba(255,255,255,.08);
+    --edge: rgba(160,180,230,.3); --faint: #56627a; --grid: rgba(255,255,255,.05); } }
+:root[data-theme="dark"] #onto { --bg: #060912; --panel: #0e1424; --soft: rgba(255,255,255,.06); --line: rgba(255,255,255,.08);
+    --edge: rgba(160,180,230,.3); --faint: #56627a; --grid: rgba(255,255,255,.05); }
+/* light theme: a pale dawn sky, stars as faint ink */
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) #onto .space { background:
+    radial-gradient(ellipse 55% 45% at 74% 26%, rgba(150,130,240,.16), transparent 70%),
+    radial-gradient(ellipse 45% 55% at 18% 82%, rgba(60,170,200,.14), transparent 70%),
+    linear-gradient(180deg, #f4f6fb, #e8ecf5); }
+  :root:not([data-theme="dark"]) #onto .st { filter: invert(1); opacity: .22; animation: none; }
+  :root:not([data-theme="dark"]) #onto .meteor { display: none; } }
+:root[data-theme="light"] #onto .space { background:
+    radial-gradient(ellipse 55% 45% at 74% 26%, rgba(150,130,240,.16), transparent 70%),
+    radial-gradient(ellipse 45% 55% at 18% 82%, rgba(60,170,200,.14), transparent 70%),
+    linear-gradient(180deg, #f4f6fb, #e8ecf5); }
+:root[data-theme="light"] #onto .st { filter: invert(1); opacity: .22; animation: none; }
+:root[data-theme="light"] #onto .meteor { display: none; }
+.lnk line { stroke: var(--edge); stroke-width: 1.2; transition: opacity .25s, stroke .25s; }
+.lnk.runs line { stroke-opacity: .55; }
+.lnk.topic line { stroke: var(--muted); stroke-opacity: .7; stroke-width: 1.4; }
+.lnk.similar line { stroke: var(--derive); stroke-dasharray: 4 4; stroke-opacity: .8; }
+.lnk.hl line { stroke: var(--accent); stroke-opacity: 1; stroke-width: 1.8; }
+.el { font-size: 10.5px; fill: var(--ink2); text-anchor: middle; opacity: 0; pointer-events: none; transition: opacity .2s;
+  paint-order: stroke; stroke: var(--bg); stroke-width: 3.5px; stroke-linejoin: round; }
+.lnk.hl .el { opacity: 1; }
+.dim .on:not(.hl):not(.sel) { opacity: .2; }
+.dim .lnk:not(.hl) { opacity: .1; }
+.on { cursor: pointer; transition: opacity .25s; }
+.on .hit { fill: transparent; }
+.on .sel-ring { fill: none; stroke: var(--accent); stroke-width: 2; opacity: 0; transition: opacity .2s; }
+.on.sel .sel-ring { opacity: 1; }
+.on:hover .sel-ring { opacity: .45; }
+.on.sel:hover .sel-ring { opacity: 1; }
+.nl { font-size: 12px; font-weight: 600; fill: var(--ink); text-anchor: middle; paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.ns { font-size: 10.5px; fill: var(--muted); text-anchor: middle; font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.session .track { fill: none; stroke: var(--soft); stroke-width: 3; }
+.session .prog { fill: none; stroke: var(--hc); stroke-width: 3; stroke-dasharray: 100; transition: stroke-dashoffset .9s var(--ease); }
+.session .core { fill: color-mix(in srgb, var(--hc) 24%, var(--panel)); stroke: var(--hc); stroke-width: 1.5; }
+.session .glyph { fill: none; stroke: var(--hc); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.session.finished .glyph { opacity: 1; }
+.session .badge, .host .badge { fill: transparent; stroke: none; }
+.session.waiting .badge { fill: var(--derive); stroke: var(--bg); stroke-width: 2; }
+.session.blocked .badge, .host.off .badge { fill: var(--blocked); stroke: var(--bg); stroke-width: 2; }
+.session .pulse { fill: none; stroke: var(--now); stroke-width: 2; opacity: 0; transform-box: fill-box; transform-origin: center; }
+.session.busy .pulse { animation: opulse 2.4s var(--ease) infinite; }
+@keyframes opulse { 0% { opacity: .7; transform: scale(1); } 100% { opacity: 0; transform: scale(2.1); } }
+.session.ended { opacity: .55; }
+.session.ended .core { stroke-dasharray: 3 2.5; }
+.dim .session.ended.hl { opacity: .8; }
+.session.noplan .core { fill: var(--panel); }
+.topic .core { fill: var(--panel); stroke: var(--ink2); stroke-width: 1.6; }
+.topic .hash { font-size: 12px; font-weight: 700; fill: var(--ink2); text-anchor: middle; dominant-baseline: central; }
+.host .core { fill: var(--hc); }
+.host .glyph { fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; opacity: .92; }
+.host.off .core { fill: color-mix(in srgb, var(--hc) 35%, var(--panel)); }
+.legend { position: absolute; left: 14px; bottom: 14px; display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 7px 11px; font-size: 11.5px; color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 3px; backdrop-filter: blur(6px); max-width: calc(100% - 80px); }
+.legend span { display: flex; align-items: center; gap: 7px; }
+.lg-host, .lg-sess, .lg-topic, .lg-sim { display: inline-block; flex: none; }
+.lg-host { width: 10px; height: 10px; border-radius: 2px; background: var(--ink2); }
+.lg-sess { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--ink2); }
+.lg-topic { width: 8px; height: 8px; border: 1.5px solid var(--ink2); transform: rotate(45deg); margin: 0 1px; }
+.lg-sim { width: 14px; border-top: 1.5px dashed var(--derive); }
+.zoom { position: absolute; right: 14px; bottom: 14px; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 3px; }
+.zoom button { all: unset; cursor: pointer; width: 30px; height: 28px; display: grid; place-items: center; font-size: 16px; color: var(--ink2); }
+.zoom button + button { border-top: 1px solid var(--line); }
+.zoom button:hover { background: var(--soft); color: var(--ink); }
+.zoom button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.zoom svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.empty-onto { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; color: var(--muted); font-size: 13.5px; line-height: 1.9; pointer-events: none; }
+.empty-onto[hidden] { display: none; }
+.empty-onto code { background: var(--soft); padding: 2px 8px; border-radius: 3px; }
+
+/* inspector */
+.insp { position: relative; overflow-y: auto; padding: 14px 18px 24px; background: var(--panel); border-left: 1px solid var(--line);
+  animation: slidein .35s var(--ease) both; }
+@keyframes slidein { from { opacity: 0; transform: translateX(16px); } }
+.insp[hidden] { display: none; }
+.ih { display: flex; align-items: center; }
+.ik { font-size: 11.5px; font-weight: 650; color: var(--ink2); padding: 1px 8px 1px 7px; border-left: 3px solid var(--hc, var(--ink2)); background: var(--soft); border-radius: 0 3px 3px 0; }
+.x { all: unset; cursor: pointer; margin-left: auto; width: 26px; height: 26px; display: grid; place-items: center; font-size: 18px; color: var(--muted); border-radius: 3px; }
+.x:hover { background: var(--soft); color: var(--ink); }
+.insp h2 { font-size: 17px; font-weight: 700; letter-spacing: -.02em; line-height: 1.35; margin: 10px 0 12px; overflow-wrap: anywhere; }
+.prog-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+.segbar { display: flex; gap: 2px; height: 6px; }
+.segbar i { flex: 1; background: var(--soft); border-radius: 1px; }
+.segbar i.done { background: var(--done); } .segbar i.now, .segbar i.side { background: var(--now); } .segbar i.blocked { background: var(--blocked); }
+.insp .cur { padding: 10px 0 0; min-height: 0; }
+.props { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 7px 10px; margin: 16px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line); font-size: 12.5px; }
+.props dt { color: var(--muted); }
+.props dd { margin: 0; color: var(--ink2); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.props code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.props .err { color: var(--blocked); }
+.tag { all: unset; cursor: pointer; font-size: 12px; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 0 7px; border-radius: 2px; }
+.tag:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.hchip { display: inline-flex; align-items: center; gap: 5px; }
+.st { font-size: 11.5px; font-weight: 600; color: var(--muted); flex: none; }
+.st.busy { color: var(--now); } .st.waiting { color: var(--derive); } .st.ended { color: var(--faint); }
+.mini { overflow-x: auto; padding: 10px; border: 1px solid var(--line); border-radius: 3px; scrollbar-width: thin;
+  background-image: radial-gradient(var(--grid) 1px, transparent 1.2px); background-size: 16px 16px; }
+.list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 3px; }
+.srow { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: flex-start; gap: 9px; padding: 9px 10px; }
+.srow + .srow { border-top: 1px solid var(--line); }
+.srow:hover { background: var(--soft); }
+.srow .sw { margin-top: 5px; }
+.srow .sb { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.srow .t { font-size: 12.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.srow .an { font-size: 11.5px; color: var(--muted); }
+.srow .segbar { height: 4px; }
+.primary { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; margin-top: 20px; padding: 8px 0; text-align: center;
+  font-size: 13px; font-weight: 650; color: #fff; background: var(--accent); border-radius: 3px; transition: filter .2s; }
+.primary:hover { filter: brightness(1.1); }
+.primary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+
+/* ontology: hierarchy — hosts and projects anchor, sessions needing attention speak, the rest step back */
+.nl { font-size: 11.5px; font-weight: 500; fill: var(--ink2); }
+.host .nl { font-size: 12.5px; font-weight: 700; fill: var(--ink); }
+.project .nl, .topic .nl, .session.active .nl, .on.sel .nl, .on.hl .nl { font-weight: 650; fill: var(--ink); }
+.ns { font-size: 10px; }
+.session:not(.active) .core { fill: color-mix(in srgb, var(--hc) 10%, var(--panel)); stroke-opacity: .55; }
+.session:not(.active) .prog { stroke-opacity: .5; }
+.session.finished:not(.active) .glyph { opacity: .6; }
+.session.active .core { stroke-width: 2; }
+.ilog { list-style: none; margin: 0; padding: 0; font-size: 12px; color: var(--ink2); border-left: 1px solid var(--line); }
+.ilog li { position: relative; display: flex; gap: 10px; padding: 3px 0 7px 14px; }
+.ilog li::before { content: ""; position: absolute; left: -4px; top: 8px; width: 7px; height: 7px; border-radius: 50%; background: var(--panel); border: 1.5px solid var(--faint); }
+.ilog li.derive::before, .ilog li.add::before { border-color: var(--derive); }
+.ilog li.blocked::before { border-color: var(--blocked); }
+.ilog li.replan::before, .ilog li.topic::before { border-color: var(--done); }
+.ilog time { flex: none; color: var(--muted); }
+
+/* step outputs */
+.ficon { flex: none; display: block; }
+.fi-page { fill: var(--panel); stroke: var(--faint); stroke-width: 1.1; }
+.fi-fold { fill: none; stroke: var(--faint); stroke-width: 1.1; stroke-linejoin: round; }
+.fi-t { fill: #fff; font: 700 5.6px/1 var(--mono); text-anchor: middle; letter-spacing: .02em; }
+.outs { padding: 4px 20px 14px; }
+.outs .sec, .insp h3.sec { font-size: 12px; font-weight: 650; color: var(--muted); margin: 6px 0 8px; display: flex; gap: 6px; }
+.ostep { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); align-items: start; }
+.os-t { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink2); padding-top: 6px; min-width: 0; }
+.sd { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+.sd.done { background: var(--done); } .sd.now, .sd.side { background: var(--now); } .sd.blocked { background: var(--blocked); }
+.ofiles { display: flex; flex-wrap: wrap; gap: 6px; }
+.otile { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 8px; max-width: 280px; padding: 5px 10px 5px 7px;
+  border: 1px solid var(--line); border-radius: 3px; background: var(--panel); transition: border-color .2s, background .2s; }
+.otile:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+.otile:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ot-n { font-size: 12.5px; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ot-t { font-size: 11px; color: var(--muted); flex: none; }
+.otile.new { animation: tilein .9s var(--ease) both; }
+@keyframes tilein { 0% { opacity: 0; transform: translateY(6px) scale(.96); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); }
+  60% { opacity: 1; transform: none; box-shadow: 0 0 0 5px transparent; } }
+.outs.compact .ostep { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+.outs.compact .os-t { padding-top: 0; }
+.outs.compact .otile { max-width: 100%; width: 100%; }
+.insp .outs { padding: 0; border-bottom: 1px solid var(--line); }
+/* badge on a plan node: this step left files */
+.n .ob { opacity: 0; pointer-events: none; cursor: pointer; transition: opacity .3s; }
+.n.has-out .ob { opacity: 1; pointer-events: auto; }
+.ob-bg { fill: var(--panel); stroke: var(--edge); stroke-width: 1; transition: stroke .2s; }
+.ob:hover .ob-bg { stroke: var(--accent); }
+.ob-doc { fill: none; stroke: var(--ink2); stroke-width: 1.1; stroke-linejoin: round; }
+.ob-n { font-size: 9.5px; font-weight: 700; fill: var(--ink2); dominant-baseline: central; }
+.n.out-pop .ob { animation: efade .5s both; }
+.n.out-pop .ob-bg { animation: obflash 1.3s var(--ease); }
+@keyframes obflash { 0%, 35% { fill: color-mix(in srgb, var(--accent) 35%, var(--panel)); stroke: var(--accent); stroke-width: 2; } }
+/* stalled: in progress on paper, nothing recorded for a while */
+.chip.stale { color: var(--derive); background: color-mix(in srgb, var(--derive) 13%, var(--panel)); }
+.chip.stale i { animation: none; }
+.n.now.stale .box { stroke: var(--derive); stroke-dasharray: 4 3; fill: color-mix(in srgb, var(--derive) 9%, var(--node)); filter: none; }
+.n.now.stale .lb { fill: var(--derive); }
+.n.now.stale .halo, .n.now.stale .shine { animation: none; opacity: 0; }
+.n.now.stale .i-spin { stroke: var(--derive); animation-duration: 4s; }
+.n.now.stale .i-core { fill: var(--derive); }
+.kpi.stale i { background: var(--derive); border-radius: 1px; transform: rotate(45deg); }
+.session.stale .trail, .session.stale .comet { opacity: 0 !important; animation: none !important; }
+.session.stale .track { stroke: var(--derive); stroke-dasharray: 2 3; }
+.ns.slow, .ns.cur.slow { fill: var(--derive); font-weight: 600; }
+/* viewer */
+.vw { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; }
+.vw[hidden] { display: none; }
+.vw-back { position: absolute; inset: 0; background: rgba(17,20,24,.62); backdrop-filter: blur(3px); animation: efade .25s both; }
+.vw-box { position: relative; width: min(1280px, calc(100vw - 48px)); height: calc(100vh - 64px); display: grid; grid-template-columns: 260px minmax(0, 1fr);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; box-shadow: 0 30px 80px -20px rgba(0,0,0,.6);
+  animation: vwin .35s var(--ease) both; }
+@keyframes vwin { from { opacity: 0; transform: translateY(10px) scale(.985); } }
+.vw-list { overflow-y: auto; border-right: 1px solid var(--line); padding: 14px 10px 20px; background: var(--bg); }
+.vw-sess { padding: 0 6px 10px; display: flex; flex-direction: column; gap: 2px; }
+.vw-sess b { font-size: 13.5px; } .vw-sess span { font-size: 11.5px; color: var(--muted); }
+.vw-step { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 650; color: var(--ink2); padding: 12px 6px 4px; }
+.vw-step span { margin-left: auto; font-weight: 500; color: var(--muted); font-size: 11px; }
+.vw-row { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 9px; width: 100%; padding: 5px 6px; border-radius: 3px; font-size: 12.5px; color: var(--ink2); }
+.vw-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vw-row:hover { background: var(--soft); }
+.vw-row.on { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); color: var(--ink); box-shadow: inset 2px 0 0 var(--accent); }
+.vw-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.vw-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.vw-bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--line); }
+.vw-tt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.vw-tt b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vw-tt span { font-size: 11.5px; color: var(--muted); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vw-btn { font-size: 12px; font-weight: 600; color: var(--ink2); text-decoration: none; padding: 5px 10px; border-radius: 3px; background: var(--soft); flex: none; }
+.vw-btn:hover { color: var(--ink); box-shadow: inset 0 0 0 1px var(--edge); }
+.vw-x { all: unset; cursor: pointer; width: 30px; height: 30px; display: grid; place-items: center; font-size: 20px; color: var(--muted); border-radius: 3px; }
+.vw-x:hover { background: var(--soft); color: var(--ink); }
+.vw-body { flex: 1; min-height: 0; overflow: auto; background: var(--bg); }
+.vw-body iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
+.vw-img { min-height: 100%; display: grid; place-items: center; padding: 20px;
+  background-image: radial-gradient(var(--grid) 1px, transparent 1.2px); background-size: 16px 16px; }
+.vw-img img { max-width: 100%; max-height: calc(100vh - 160px); box-shadow: 0 0 0 1px var(--line); background: #fff; }
+.vw-body pre { margin: 0; padding: 16px 20px; font: 12px/1.6 var(--mono); color: var(--ink2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.vw-table table { border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.vw-table th, .vw-table td { padding: 5px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.vw-table th { position: sticky; top: 0; background: var(--panel); color: var(--ink); font-weight: 650; }
+.vw-table td { color: var(--ink2); }
+.vw-note, .vw-wait { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 30px; text-align: center; color: var(--muted); }
+.vw-note b { font-size: 15px; color: var(--ink); margin-top: 6px; }
+.vw-note p { margin: 0 0 6px; font-size: 13px; }
+.vw-note .primary { width: auto; padding: 8px 22px; margin: 0; }
+body.vw-open { overflow: hidden; }
+
+/* ontology: what is running right now */
+.session .trail, .session .comet { fill: none; opacity: 0; transform-box: fill-box; transform-origin: center; }
+.session .trail { stroke: var(--now); stroke-width: 2; stroke-dasharray: 26 74; stroke-linecap: round; }
+.session .comet { stroke: var(--now); stroke-width: 3.2; stroke-dasharray: 3 97; stroke-dashoffset: -23; stroke-linecap: round;
+  filter: drop-shadow(0 0 4px var(--now)); }
+.session.busy .trail { opacity: .35; animation: orbit 1.8s linear infinite; }
+.session.busy .comet { opacity: 1; animation: orbit 1.8s linear infinite; }
+@keyframes orbit { to { transform: rotate(360deg); } }
+.session.busy .core { animation: corebreathe 2.6s ease-in-out infinite; }
+@keyframes corebreathe { 50% { fill: color-mix(in srgb, var(--hc) 42%, var(--panel)); } }
+.session.waiting .trail { opacity: .8; stroke: var(--derive); stroke-dasharray: 100 0; stroke-width: 1.5; animation: waitring 2.4s ease-in-out infinite; }
+@keyframes waitring { 0%, 100% { opacity: .15; transform: scale(.94); } 50% { opacity: .8; transform: scale(1.04); } }
+.session.blocked .badge, .session.waiting .badge { animation: badgeblink 1.6s ease-in-out infinite; }
+@keyframes badgeblink { 50% { opacity: .35; } }
+.session .pulse { stroke-width: 1.5; }
+.session.busy .pulse { animation-duration: 3s; }
+.ns.cur { fill: var(--now); font-weight: 600; }
+.ns.bad { fill: var(--blocked); }
+.lnk.live line { stroke: var(--now); stroke-opacity: .75; stroke-width: 1.6; stroke-dasharray: 3 7; animation: flow 1.1s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -10; } }
+.dim .lnk.live:not(.hl) { opacity: .25; }
+.project .live-dot { fill: transparent; }
+.project.active .live-dot { fill: var(--now); stroke: var(--bg); stroke-width: 2; animation: badgeblink 1.6s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 @media (max-width: 760px) {
   .wrap { flex-direction: column; }
@@ -251,15 +616,29 @@ body.is-dragging .tip { display: none; }
   main { padding: 6px 16px 32px; }
   header { padding: 0 16px; }
   .summary { display: none; }
+  #onto, #onto.has-insp { grid-template-columns: minmax(0, 1fr); }
+  .ox, .legend { display: none; }
+  .insp { position: fixed; left: 0; right: 0; bottom: 0; max-height: 62vh; z-index: 20; border-left: 0; border-top: 1px solid var(--line);
+    box-shadow: 0 -16px 40px -20px rgba(0,0,0,.5); }
+  .tabs button { padding: 0 8px; }
+  header { gap: 10px; padding: 0 12px; }
+  #live-text, .demo-pill, .kpi.plain { display: none; }
+  .vw-box { width: 100vw; height: 100vh; border-radius: 0; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .vw-list { max-height: 28vh; border-right: 0; border-bottom: 1px solid var(--line); }
+  .ostep { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+  .os-t { padding-top: 0; }
 }
 </style>
 </head>
 <body>
 <header>
+  <button class="navt" id="navt" title="왼쪽 목록 숨기기/보이기 ( [ )" aria-label="왼쪽 목록 숨기기/보이기" aria-pressed="true">
+    <svg viewBox="0 0 18 18"><rect x="2" y="3" width="14" height="12" rx="2"/><path d="M7 3v12"/><rect class="pane" x="2.8" y="3.8" width="3.6" height="10.4" rx="1"/></svg></button>
   <div class="brand">
     <svg width="22" height="14" viewBox="0 0 22 14"><path class="ml" d="M4,7 H18" stroke-width="1.5"/><circle class="m1" cx="4" cy="7" r="3"/><circle class="m1" cx="11" cy="7" r="3"/><circle class="m2" cx="18" cy="7" r="3"/></svg>
     follow_wollof
   </div>
+  <nav class="tabs" id="tabs" aria-label="화면"><button data-v="onto">온톨로지</button><button data-v="sessions">세션</button><span class="bar"></span></nav>
   <div class="summary" id="summary"></div>
   <div class="spacer"></div>
   <button class="reset-order" id="reset-order" hidden title="끌어서 바꾼 순서를 지우고 상태순 자동 정렬로">자동 정렬</button>
@@ -275,16 +654,20 @@ body.is-dragging .tip { display: none; }
   <aside id="side"></aside>
   <main id="main"></main>
 </div>
+<div id="onto"></div>
 
 <script type="module">
-import { replayPlan, GraphView } from "./graph.js";
+import { replayPlan, GraphView, hooks, STALE_MS, dur } from "./graph.js";
+import { openOutputs, outputsHtml } from "./viewer.js";
+import { Ontology, HOST_COLORS, projectOf } from "./ontology.js";
 
 const RECENT_MS = 24 * 3600 * 1000;
-const RANK = { waiting: 0, busy: 1, idle: 2 };
-const KIND = { derive: "파생", add: "추가", drop: "제외", blocked: "막힘", replan: "재계획" };
+const RANK = { waiting: 0, busy: 1, idle: 2, ended: 4 };
+const KIND = { derive: "파생", add: "추가", drop: "제외", blocked: "막힘", replan: "재계획", topic: "주제" };
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const lastActive = s => Math.max(s.statusUpdatedAt || 0, s.updatedAt || 0, (s.mtime || 0) * 1000);
-let state = null, selected = null, mode = null;
+let state = null, selected = null, mode = null, view = "onto";
+const hostColor = name => HOST_COLORS[Math.max(0, state.hosts.findIndex(h => h.name === name)) % HOST_COLORS.length];
 const panels = new Map();      // key -> { el, view, scrolledTo }
 const openOld = new Set();
 
@@ -302,6 +685,10 @@ function sessions() {
   for (const h of state.hosts) for (const s of h.sessions) {
     let g = null;
     try { g = replayPlan(s.plan); } catch (e) { console.error("plan replay failed", h.name, s.sessionId, e); }
+    if (g) {   // stalled: a step is in progress but nothing has been recorded for a while
+      const quiet = Date.now() - g.lastT;
+      g.stale = s.status !== "ended" && g.lastT && g.current.some(n => n.state === "now") && quiet > STALE_MS ? quiet : 0;
+    }
     out.push({ ...s, host: h.name, key: h.name + "/" + s.sessionId, g,
                label: (g && g.title) || s.title || s.lastPrompt || s.name || s.sessionId.slice(0, 8) });
   }
@@ -333,12 +720,20 @@ function renderSide(all) {
   let html = `<div class="item all${selected ? "" : " sel"}" data-key="">전체</div>`;
   for (const h of state.hosts) {
     const mine = all.filter(s => s.host === h.name);
-    const recent = mine.filter(s => s.g || s.status !== "idle" || Date.now() - lastActive(s) < RECENT_MS);
-    const old = mine.filter(s => !recent.includes(s));
-    html += `<div class="host"><span class="dot ${h.connected ? "" : h.lastSeen ? "off" : ""}"></span>${esc(h.name)}
+    const ended = mine.filter(s => s.status === "ended");
+    const recent = mine.filter(s => s.status !== "ended" && (s.g || s.status !== "idle" || Date.now() - lastActive(s) < RECENT_MS));
+    const old = mine.filter(s => !recent.includes(s) && !ended.includes(s));
+    html += `<div class="host"><i class="sw" style="--hc:${hostColor(h.name)}"></i>${esc(h.name)}<span class="dot ${h.connected ? "" : h.lastSeen ? "off" : ""}"></span>
       ${!h.connected && h.error ? `<span class="err" title="${esc(h.error)}">${esc(h.error)}</span>` : ""}</div>`;
-    html += recent.map(item).join("");
+    const byProject = new Map();
+    for (const s of recent) {
+      const p = projectOf(s.cwd).name;
+      if (!byProject.has(p)) byProject.set(p, []);
+      byProject.get(p).push(s);
+    }
+    for (const [p, list] of byProject) html += `<div class="proj"><i class="fd" style="--hc:${hostColor(h.name)}"></i>${esc(p)}</div>` + list.map(item).join("");
     if (old.length) html += `<details${openOld.has(h.name) ? " open" : ""} data-host="${esc(h.name)}"><summary>유휴 ${old.length}</summary>${old.map(item).join("")}</details>`;
+    if (ended.length) html += `<details${openOld.has(h.name + "/ended") ? " open" : ""} data-host="${esc(h.name)}/ended"><summary>종료 ${ended.length}</summary>${ended.map(item).join("")}</details>`;
   }
   const side = document.getElementById("side");
   if (side.innerHTML !== html) side.innerHTML = html;
@@ -348,12 +743,14 @@ function makePanel(s, big) {
   const el = document.createElement("section");
   el.className = "panel";
   el.innerHTML = `
-    <div class="ph" data-key="${esc(s.key)}"><span class="grip" title="끌어서 순서 변경"><svg viewBox="0 0 8 14"><circle cx="2" cy="2" r="1.3"/><circle cx="6" cy="2" r="1.3"/><circle cx="2" cy="7" r="1.3"/><circle cx="6" cy="7" r="1.3"/><circle cx="2" cy="12" r="1.3"/><circle cx="6" cy="12" r="1.3"/></svg></span><span class="dot"></span><span class="title"></span><span class="hostname"></span>
+    <div class="ph" data-key="${esc(s.key)}"><span class="grip" title="끌어서 순서 변경"><svg viewBox="0 0 8 14"><circle cx="2" cy="2" r="1.3"/><circle cx="6" cy="2" r="1.3"/><circle cx="2" cy="7" r="1.3"/><circle cx="6" cy="7" r="1.3"/><circle cx="2" cy="12" r="1.3"/><circle cx="6" cy="12" r="1.3"/></svg></span><span class="dot"></span><span class="title"></span><span class="hostname"><i class="sw"></i><span></span></span>
       <span class="meta"><span class="count num"></span>
         <svg class="ring" viewBox="0 0 22 22"><circle class="bg" cx="11" cy="11" r="8.5"/><circle class="fg" cx="11" cy="11" r="8.5" pathLength="100" stroke-dashoffset="100"/></svg></span></div>
-    <div class="cur"></div><div class="gbox"></div>${big ? `<div class="log"></div>` : ""}`;
+    <div class="cur"></div>${big ? `<div class="ptopics"></div>` : ""}<div class="gbox"></div>${big ? `<div class="outs"></div><div class="log"></div>` : ""}`;
   el.addEventListener("animationend", e => { if (e.target === el) el.style.animation = "none"; });
-  return { el, view: new GraphView(el.querySelector(".gbox"), big), scrolledTo: null };
+  const view = new GraphView(el.querySelector(".gbox"), big);
+  view.ctx = { key: s.key };
+  return { el, view, scrolledTo: null, seen: null };
 }
 
 function fillPanel(p, s) {
@@ -363,14 +760,30 @@ function fillPanel(p, s) {
   el.querySelector(".ring .fg").style.strokeDashoffset = 100 - (g.total ? 100 * g.done / g.total : 0);
   el.querySelector(".ph .dot").className = "dot " + s.status;
   el.querySelector(".title").textContent = s.label;
-  el.querySelector(".hostname").textContent = s.host;
+  el.querySelector(".hostname span").textContent = s.host + " / " + projectOf(s.cwd).name;
+  el.style.setProperty("--hc", hostColor(s.host));
   el.querySelector(".count").textContent = `${ago(lastActive(s))} · ${g.done}/${g.total}`;
   const curHtml = finished ? `<span class="chip finished"><i></i>모든 단계 완료</span>`
-    : g.current.length ? g.current.map(n => `<span class="chip ${n.state}"><i></i>${esc(n.title)}</span>`).join("")
-    : `<span class="chip idle"><i></i>진행 중인 단계 없음</span>`;
+    : (g.stale ? `<span class="chip stale"><i></i>정체 · ${dur(g.stale)}째 기록 없음</span>` : "") +
+      (g.current.length ? g.current.map(n => `<span class="chip ${n.state}"><i></i>${esc(n.title)}</span>`).join("")
+    : `<span class="chip idle"><i></i>진행 중인 단계 없음</span>`);
   const cur = el.querySelector(".cur");
   if (cur.dataset.h !== curHtml) { cur.innerHTML = curHtml; cur.dataset.h = curHtml; }   // re-animate only on change
   p.view.update(g);
+  const pt = el.querySelector(".ptopics");
+  if (pt) {
+    const html = g.topics.map(t => {
+      const peers = sessions().filter(o => o.key !== s.key && o.g?.topics.includes(t)).length;
+      return `<button class="tag" data-topic="${esc(t)}" title="온톨로지에서 이 주제 보기">#${esc(t)}</button><span class="pn">같은 주제 세션 ${peers}</span>`;
+    }).join("") + (g.angle ? `<span class="pa">${esc(g.angle)}</span>` : "");
+    if (pt.dataset.h !== html) { pt.innerHTML = html; pt.dataset.h = html; }
+  }
+  const outs = el.querySelector(".outs");
+  if (outs) {   // outputs appear under the step that made them; only tiles new since the last draw animate in
+    const html = g.outs.length ? `<h3 class="sec">산출물 <b class="num">${g.outs.length}</b></h3>` + outputsHtml(s, p.seen) : "";
+    if (outs.dataset.h !== html) { outs.innerHTML = html; outs.dataset.h = html; }
+    p.seen = new Set(g.outs.map(f => f.path));
+  }
   const log = el.querySelector(".log");
   if (log) {
     const html = g.log.length ? g.log.slice().reverse().map(l =>
@@ -396,7 +809,7 @@ function fillPanel(p, s) {
 
 function renderMain(all) {
   const main = document.getElementById("main");
-  const want = selected ? all.filter(s => s.key === selected) : applyUserOrder(all.filter(s => s.g).sort((a, b) =>
+  const want = selected ? all.filter(s => s.key === selected) : applyUserOrder(all.filter(s => s.g && s.status !== "ended").sort((a, b) =>
     ((a.g.done === a.g.total) - (b.g.done === b.g.total)) || ((RANK[a.status] ?? 3) - (RANK[b.status] ?? 3)) || lastActive(b) - lastActive(a)));
   main.classList.toggle("focus", !!selected);
   document.getElementById("reset-order").hidden = !!selected || !userOrder.length;
@@ -441,15 +854,92 @@ function renderMain(all) {
 function render() {
   if (!state) return;
   const all = sessions();
-  renderSide(all);
-  renderMain(all);
+  if (view === "onto") onto.update(all, state.hosts);
+  else { renderSide(all); renderMain(all); }
   const n = st => all.filter(s => s.status === st).length;
   const active = all.filter(s => s.g && s.g.done < s.g.total).length;
-  document.getElementById("summary").innerHTML =
-    `<span>진행 중인 계획 <b class="num">${active}</b></span><span>작업 중 <b class="num">${n("busy")}</b></span>` +
-    (n("waiting") ? `<span>입력 대기 <b class="num">${n("waiting")}</b></span>` : "");
+  const blocked = all.filter(s => s.status !== "ended" && s.g?.current.some(c => c.state === "blocked")).length;
+  const chip = (k, cls, label, v) => v ? `<button class="kpi ${cls}${markKind === k ? " on" : ""}" data-kpi="${k}" title="온톨로지에서 이 세션들만 보기"><i></i>${label}<b class="num">${v}</b></button>` : "";
+  const html = chip("busy", "busy", "작업 중", n("busy")) + chip("waiting", "waiting", "입력 대기", n("waiting"))
+    + chip("blocked", "blocked", "막힘", blocked) + chip("stale", "stale", "정체", all.filter(s => s.g?.stale).length) + `<span class="kpi plain">진행 중인 계획<b class="num">${active}</b></span>`;
+  const sum = document.getElementById("summary");
+  if (sum.dataset.h !== html) { sum.innerHTML = html; sum.dataset.h = html; }
   document.title = (n("waiting") ? `(${n("waiting")}) ` : "") + "follow_wollof";
 }
+
+// views: ontology (all sessions as one graph) and sessions (panels; ?s=<key> is one session's page)
+const onto = new Ontology(document.getElementById("onto"), { lastActive, onOpen: key => { selected = key; setView("sessions"); } });
+onto.onLayers = () => render();
+function syncUrl() {
+  const q = new URLSearchParams(location.search);
+  q.delete("s"); q.delete("view");
+  if (view === "sessions") selected ? q.set("s", selected) : q.set("view", "sessions");
+  const qs = q.toString().replace(/=(&|$)/g, "$1");   // keep bare flags like ?demo
+  history.replaceState(null, "", location.pathname + (qs ? "?" + qs : ""));
+}
+function setView(v) {
+  view = v === "sessions" ? "sessions" : "onto";
+  document.body.dataset.view = view;
+  try { localStorage.setItem("fw-view", view); } catch (e) {}
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.v === view));
+  const on = document.querySelector(`#tabs button[data-v="${view}"]`), bar = document.querySelector("#tabs .bar");
+  bar.style.left = on.offsetLeft + "px";
+  bar.style.width = on.offsetWidth + "px";
+  mode = null;   // panels rebuild when coming back
+  syncUrl();
+  render();
+  if (view === "onto" && !onto.fitted) requestAnimationFrame(() => { onto.fitted = onto.fit(); });
+}
+document.getElementById("tabs").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.v === "sessions" && view === "sessions") selected = null;   // second click: back to all panels
+  setView(b.dataset.v);
+});
+
+// step outputs: tiles, graph badges and the inspector all open the same viewer
+const isDemo = new URLSearchParams(location.search).has("demo");
+const openFor = (key, at) => { const s = sessions().find(x => x.key === key); if (s?.g?.outs.length) openOutputs(s, at, isDemo); };
+hooks.onOut = openFor;
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-out]");
+  if (t) { e.stopPropagation(); openFor(t.dataset.key, t.dataset.out); }
+}, true);
+
+// header chips: light up busy / waiting / blocked sessions in the ontology
+let markKind = null;
+const MARKS = {
+  busy: d => d.status === "busy",
+  waiting: d => d.status === "waiting",
+  blocked: d => d.status !== "ended" && !!d.g?.current.some(c => c.state === "blocked"),
+  stale: d => !!d.g?.stale,
+};
+document.getElementById("summary").addEventListener("click", e => {
+  const k = e.target.closest("[data-kpi]")?.dataset.kpi;
+  if (!k) return;
+  markKind = markKind === k ? null : k;
+  onto.mark = markKind ? n => n.type === "session" && MARKS[markKind](n.data) : null;
+  if (view !== "onto") setView("onto"); else { render(); onto.highlight(); }
+});
+// left panel (ontology explorer / session list): hide to give the graph the whole width; remembered per browser
+function setNav(open) {
+  document.body.classList.toggle("nav-hidden", !open);
+  document.getElementById("navt").setAttribute("aria-pressed", open);
+  try { localStorage.setItem("fw-nav", open ? "1" : "0"); } catch (e) {}
+}
+let navOpen = true;
+try { navOpen = localStorage.getItem("fw-nav") !== "0"; } catch (e) {}
+setNav(navOpen);
+document.getElementById("navt").addEventListener("click", () => setNav(document.body.classList.contains("nav-hidden")));
+document.addEventListener("keydown", e => {
+  if (e.key === "[" && !e.target.closest("input, textarea") && document.querySelector(".vw")?.hidden !== false) setNav(document.body.classList.contains("nav-hidden"));
+});
+
+document.addEventListener("keydown", e => {
+  if (view !== "onto" || e.target.closest("input")) return;
+  if (e.key === "/") { e.preventDefault(); document.querySelector("#onto .search input").focus(); }
+  else if (e.key === "Escape") { markKind = null; onto.mark = null; onto.select(null); render(); }
+});
 
 // theme
 const THEMES = ["system", "light", "dark"];
@@ -474,10 +964,13 @@ document.addEventListener("toggle", e => {
   if (h) e.target.open ? openOld.add(h) : openOld.delete(h);
 }, true);
 document.addEventListener("click", e => {
+  const tp = e.target.closest("[data-topic]");
+  if (tp) { setView("onto"); onto.select("t:" + tp.dataset.topic); return onto.center("t:" + tp.dataset.topic); }
   if (justDragged) return;
   const el = e.target.closest(".item, .ph");
   if (!el) return;
   selected = el.dataset.key && selected !== el.dataset.key ? el.dataset.key : null;
+  syncUrl();
   render();
 });
 
@@ -579,25 +1072,45 @@ function startDemo(stepMs) {
   const steps = (...xs) => xs.map(([id, title, after]) => ({ id, title, ...(after ? { after } : {}) }));
   const base = () => ({
     rna: [ev("plan", { title: "RNA-seq 차등발현 분석", nodes: steps(["qc", "품질 관리"], ["align", "정렬", ["qc"]], ["count", "유전자 정량", ["align"]],
-           ["deg", "DESeq2 비교", ["count"]], ["gsea", "GSEA", ["deg"]], ["gsva", "GSVA", ["deg"]], ["fig", "Figure 정리", ["gsea", "gsva"]]) }), ev("next", { id: "qc" })],
+           ["deg", "DESeq2 비교", ["count"]], ["gsea", "GSEA", ["deg"]], ["gsva", "GSVA", ["deg"]], ["fig", "Figure 정리", ["gsea", "gsva"]]) }),
+          ev("topic", { topics: ["ncc-rnaseq"], angle: "벌크 차등발현" }), ev("next", { id: "qc" })],
+    sc: [ev("plan", { title: "단일세포 참조로 세포 비율 추정", nodes: steps(["ref", "참조 아틀라스 준비"], ["map", "라벨 전이", ["ref"]], ["decon", "디컨볼루션", ["map"]],
+           ["cmp", "그룹 간 비교", ["decon"]]) }),
+          ev("topic", { topics: ["ncc-rnaseq"], angle: "세포 구성 차이로 설명되는지" }), ev("next", { id: "ref" }), ev("next", { id: "map" })],
     var: [ev("plan", { title: "WGS 변이 호출 파이프라인", nodes: steps(["fq", "FASTQ 점검"], ["bwa", "BWA 정렬", ["fq"]], ["dedup", "중복 제거", ["bwa"]],
            ["call", "Mutect2 호출", ["dedup"]], ["filter", "필터링", ["call"]], ["anno", "VEP 주석", ["filter"]]) }),
+          ev("topic", { topics: ["wgs-somatic"], angle: "Mutect2 tumor-only" }),
           ev("next", { id: "fq" }), ev("next", { id: "bwa" }), ev("next", { id: "dedup" }), ev("next", { id: "call" })],
-    lit: [ev("plan", { title: "문헌 리뷰 정리", nodes: steps(["search", "검색"], ["screen", "선별", ["search"]], ["sum", "요약", ["screen"]]) }),
+    strelka: [ev("plan", { title: "Strelka2 교차 검증", nodes: steps(["prep", "BAM 재사용"], ["run", "Strelka2 실행", ["prep"]], ["isec", "호출 교집합", ["run"]]) }),
+          ev("next", { id: "prep" })],
+    lit: [ev("plan", { title: "배치 효과 문헌 정리", nodes: steps(["search", "검색"], ["screen", "선별", ["search"]], ["sum", "요약", ["screen"]]) }),
+          ev("topic", { topics: ["ncc-rnaseq"], angle: "배치 보정 방법 비교" }),
           ev("next", { id: "search" }), ev("next", { id: "screen" }), ev("next", { id: "sum" }), ev("state", { id: "sum", state: "done" })],
+    figs: [{ ...ev("plan", { title: "RNA-seq Figure 레이아웃", nodes: steps(["draft", "초안"], ["panel", "패널 배치", ["draft"]]) }), t: new Date(t0 - 3.2 * 3600e3).toISOString() },
+           { ...ev("next", { id: "draft" }), t: new Date(t0 - 3.1 * 3600e3).toISOString() }],
   });
   const script = [
+    ["rna", ev("out", { id: "qc", files: [{ path: "/home/me/R_env/01_ncc/qc/multiqc_report.html", name: "multiqc_report.html" }] })],
     ["rna", ev("next", { id: "align" })],
     ["var", ev("state", { id: "call", state: "blocked", note: "panel of normals 경로 확인 필요" })],
+    ["sc", ev("next", { id: "decon" })],
     ["rna", ev("next", { id: "count" })],
+    ["strelka", ev("topic", { topics: ["wgs-somatic"], angle: "Strelka2 로 교차 검증" })],
     ["rna", ev("derive", { id: "batch", title: "배치 효과 보정", from: "count", into: ["deg"], reason: "PCA 에서 배치 효과" })],
     ["rna", ev("next", { id: "batch" })],
     ["var", ev("next", { id: "call" })],
+    ["strelka", ev("next", { id: "run" })],
+    ["rna", ev("out", { id: "batch", files: [{ path: "/home/me/R_env/01_ncc/fig/pca_before_after.png", name: "pca_before_after.png" }] })],
     ["rna", ev("next", { id: "deg" })],
+    ["sc", ev("next", { id: "cmp" })],
     ["rna", ev("drop", { id: "gsva", reason: "GSEA 로 충분", by: "gsea" })],
     ["var", ev("next", { id: "filter" })],
+    ["rna", ev("out", { id: "deg", files: [{ path: "/home/me/R_env/01_ncc/deg/deseq2_results.csv", name: "deseq2_results.csv" },
+      { path: "/home/me/R_env/01_ncc/report/DEG_summary.pdf", name: "DEG_summary.pdf" }] })],
     ["rna", ev("next", { id: "gsea" })],
+    ["figs", ev("next", { id: "panel" })],
     ["rna", ev("next", { id: "fig" })],
+    ["rna", ev("out", { id: "fig", files: [{ path: "/home/me/R_env/01_ncc/report/lab_meeting.pptx", name: "lab_meeting.pptx" }] })],
     ["var", ev("next", { id: "anno" })],
   ];
   let plans = base(), i = 0;
@@ -606,14 +1119,16 @@ function startDemo(stepMs) {
     const g = replayPlan(plans[k]);
     return g.current.some(n => n.state === "blocked") ? "waiting" : g.done === g.total ? "idle" : "busy";
   };
+  const live = (sessionId, name, cwd) => ({ sessionId, name, cwd, status: status(sessionId), updatedAt: now(), plan: plans[sessionId] });
   const build = () => ({ hosts: [
-    { name: "lab-server", connected: true, sessions: [
-      { sessionId: "rna", name: "rna-seq", status: status("rna"), updatedAt: now(), plan: plans.rna },
-      { sessionId: "var", name: "wgs", status: status("var"), updatedAt: now(), plan: plans.var }] },
-    { name: "gpu-box", connected: true, sessions: [
+    { name: "lab-server", connected: true, hostname: "lab01", sessions: [
+      live("rna", "rna-seq", "/home/me/R_env/01_ncc"), live("var", "wgs", "/home/me/R_env/03_wgs/calls")] },
+    { name: "gpu-box", connected: true, hostname: "gpu-a100", sessions: [
+      live("sc", "scref", "/scratch/01_ncc/scref"), live("figs", "figs", "/scratch/01_ncc/figs"),
       { sessionId: "idle1", name: "scratch", status: "idle", updatedAt: t0 - 3600e3, title: "노트북 정리" }] },
     { name: "local", connected: true, sessions: [
-      { sessionId: "lit", name: "papers", status: "idle", updatedAt: t0 - 600e3, plan: plans.lit }] },
+      live("strelka", "strelka", "C:/work/03_wgs"),
+      { sessionId: "lit", name: "papers", status: "ended", updatedAt: t0 - 2 * 86400e3, plan: plans.lit, cwd: "C:/work/07_agent" }] },
   ]});
   state = build(); render();
   setInterval(() => {
@@ -627,7 +1142,11 @@ function startDemo(stepMs) {
 }
 
 const params = new URLSearchParams(location.search);
-if (params.has("s")) selected = params.get("s");
+let savedView = "onto";
+try { savedView = localStorage.getItem("fw-view") || "onto"; } catch (e) {}
+if (params.has("s")) { selected = params.get("s"); savedView = "sessions"; }
+else if (params.has("view")) savedView = params.get("view");
+setView(savedView);
 if (params.has("theme")) applyTheme(params.get("theme"));
 if (params.has("demo")) {
   startDemo(+params.get("demo") || 2200);

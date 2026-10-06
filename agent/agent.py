@@ -21,6 +21,7 @@ PROJECTS_DIR = os.path.join(HOME, ".claude", "projects")
 FOLLOW_DIR = os.path.join(HOME, ".follow_wollof", "sessions")
 INTERVAL = float(sys.argv[sys.argv.index("--interval") + 1]) if "--interval" in sys.argv else 2.0
 PING_EVERY = 20.0
+ENDED_DAYS = 7  # sessions that closed this recently stay on the board (ontology links) as "ended"
 TAIL_BYTES = 256 * 1024
 REGISTRY_KEYS = ("pid", "sessionId", "cwd", "name", "status", "waitingFor", "kind",
                  "entrypoint", "startedAt", "updatedAt", "statusUpdatedAt", "version")
@@ -172,6 +173,26 @@ def collect():
             except OSError:
                 pass
         s["plan"] = read_plan(reg["sessionId"])
+        sessions.append(s)
+    cutoff = time.time() - ENDED_DAYS * 86400
+    for path in glob.glob(os.path.join(FOLLOW_DIR, "*", "events.jsonl")):
+        sid = os.path.basename(os.path.dirname(path))
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            continue
+        if sid in by_id or mtime < cutoff:
+            continue
+        s = {k: None for k in REGISTRY_KEYS}
+        s.update(sessionId=sid, status="ended", updatedAt=int(mtime * 1000))
+        tpath = find_transcript(sid)
+        if tpath:
+            try:
+                s.update(parse_transcript(tpath))
+            except OSError:
+                pass
+        s["plan"] = read_plan(sid)
+        s["cwd"] = next((e.get("cwd") for e in s["plan"] or [] if e.get("cwd")), None)
         sessions.append(s)
     sessions.sort(key=lambda s: s.get("startedAt") or 0)
     return sessions

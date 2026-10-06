@@ -9,13 +9,14 @@ import collections
 import json
 import os
 import queue
+import shlex
 import signal
 import subprocess
 import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config  # noqa: E402
@@ -26,6 +27,11 @@ WEB = os.path.join(ROOT, "web")
 # no console window per ssh child when the server runs windowless (pythonw) on Windows
 NO_WINDOW = {"creationflags": 0x08000000} if config.IS_WINDOWS else {}
 STALE_AFTER = 60  # seconds without any line before a host is shown as disconnected
+MAX_FILE = 80 * 1024 * 1024  # largest step output the viewer will fetch
+FILE_TYPES = {"pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif",
+              "webp": "image/webp", "svg": "image/svg+xml", "html": "text/html", "htm": "text/html",
+              "txt": "text/plain", "md": "text/plain", "csv": "text/plain", "tsv": "text/plain", "log": "text/plain",
+              "json": "text/plain", "tex": "text/plain"}
 
 
 class State:
@@ -52,6 +58,13 @@ class State:
                     h["connected"] = False
                 hosts.append(h)
             return {"t": now, "hosts": hosts}
+
+    def is_output(self, host, path):
+        """Only files a session recorded with `follow.py out` can be fetched: the viewer is not a file browser."""
+        with self.lock:
+            h = self.hosts.get(host)
+            return bool(h) and any(e.get("op") == "out" and any(f.get("path") == path for f in e.get("files", []))
+                                   for s in h["sessions"] for e in (s.get("plan") or []))
 
     def broadcast(self):
         data = json.dumps(self.snapshot(), ensure_ascii=False)
@@ -111,7 +124,27 @@ def run_host(state, cfg, host):
         backoff = min(backoff * 2, 60)
 
 
-def make_handler(state, bind="127.0.0.1"):
+def read_output(cfg, host, path):
+    """Bytes of a step output, from this computer or over the host's ssh connection settings."""
+    if host["type"] == "local":
+        with open(path, "rb") as fh:
+            data = fh.read(MAX_FILE + 1)
+    else:
+        remote = "head -c %d -- %s" % (MAX_FILE + 1, shlex.quote(path))
+        r = subprocess.run(["ssh"] + cfg["ssh_options"] + [host["ssh"], remote], stdin=subprocess.DEVNULL,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120, **NO_WINDOW)
+        if r.returncode:
+            lines = r.stderr.decode("utf-8", "ignore").strip().splitlines()
+            raise OSError(lines[-1] if lines else "ssh exit %d" % r.returncode)
+        data = r.stdout
+    if len(data) > MAX_FILE:
+        raise OSError("파일이 %dMB 보다 큼" % (MAX_FILE // 2 ** 20))
+    return data
+
+
+def make_handler(state, bind="127.0.0.1", cfg=None):
+    hosts = {h["name"]: h for h in (cfg or {}).get("hosts", [])}
+
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -125,6 +158,8 @@ def make_handler(state, bind="127.0.0.1"):
                 self._send(200, "application/json; charset=utf-8", body)
             elif path == "/events":
                 self._sse()
+            elif path == "/api/file":
+                self._file(parse_qs(urlsplit(self.path).query))
             else:
                 path = "index.html" if path in ("/", "") else path.lstrip("/")
                 full = os.path.normpath(os.path.join(WEB, path))
@@ -144,9 +179,27 @@ def make_handler(state, bind="127.0.0.1"):
             name = host.rsplit(":", 1)[0] if not host.endswith("]") else host
             return name in ("localhost", "127.0.0.1", "[::1]") or name.endswith(".localhost")
 
-        def _send(self, code, ctype, body):
+        def _file(self, q):
+            host, fpath = q.get("host", [""])[0], q.get("path", [""])[0]
+            if host not in hosts or not state.is_output(host, fpath):
+                return self._send(403, "text/plain; charset=utf-8", "기록된 산출물이 아님".encode())
+            try:
+                data = read_output(cfg, hosts[host], fpath)
+            except Exception as e:
+                return self._send(502, "text/plain; charset=utf-8", ("가져오지 못함: %s" % e).encode())
+            name = fpath.replace("\\", "/").rsplit("/", 1)[-1]
+            ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+            ctype = FILE_TYPES.get(ext, "application/octet-stream")
+            extra = {"Content-Disposition": "%s; filename*=UTF-8''%s" % ("attachment" if "dl" in q else "inline", quote(name))}
+            if ctype in ("text/html", "image/svg+xml"):   # report scripts run, but never with the dashboard's origin
+                extra["Content-Security-Policy"] = "sandbox allow-scripts allow-popups allow-downloads"
+            self._send(200, ctype + ("; charset=utf-8" if ctype.startswith("text/") else ""), data, extra)
+
+        def _send(self, code, ctype, body, extra=None):
             self.send_response(code)
             self.send_header("Content-Type", ctype)
+            for k, v in (extra or {}).items():
+                self.send_header(k, v)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
@@ -211,7 +264,7 @@ def main():
             time.sleep(30)
             state.broadcast()
     threading.Thread(target=tick, daemon=True).start()
-    server = ThreadingHTTPServer((cfg["bind"], cfg["port"]), make_handler(state, cfg["bind"]))
+    server = ThreadingHTTPServer((cfg["bind"], cfg["port"]), make_handler(state, cfg["bind"], cfg))
     server.daemon_threads = True
     write_pid(cfg["port"])
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # run atexit cleanup on `fw stop`

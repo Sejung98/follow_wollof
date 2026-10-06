@@ -4,8 +4,11 @@
 Steps are written as  id:제목  or  id:제목<dep1,dep2  (empty after '<' means no dependency).
 Without '<' a step depends on the step listed before it, so a linear plan needs no deps.
 
-  follow.py plan "작업 제목" qc:QC deg:DEG gsea:GSEA        register (or extend) the plan
-  follow.py next deg                                      finish the current step(s), start deg
+  follow.py plan "작업 제목" qc:QC deg:DEG gsea:GSEA [--topic 주제]   register (or extend) the plan
+  follow.py topic 주제[,주제2] ["이 세션의 방향"]              link this session to others on the same subject
+  follow.py topics                                        topics already used by sessions on this host
+  follow.py next deg [--out a.pdf,b.pptx]                 finish the current step(s), start deg
+  follow.py out ID 파일 [파일 ...]                           attach reports/slides/figures a step produced
   follow.py now|done|side|left ID [메모]                   set one step's state
   follow.py block ID "이유"                                 failed / waiting on the user
   follow.py derive ID "제목" --from X [--into Y,Z] --reason "이유"   new step branched off X, feeding Y
@@ -68,8 +71,8 @@ def paths():
     return d, os.path.join(d, "events.jsonl")
 
 
-def load():
-    _, ev = paths()
+def load(ev=None):
+    ev = ev or paths()[1]
     out = []
     if os.path.exists(ev):
         with open(ev, encoding="utf-8") as fh:
@@ -83,7 +86,7 @@ def load():
 
 def replay(events):
     """Same rules as replayPlan() in web/graph.js."""
-    g = {"title": None, "v": 0, "nodes": {}, "order": []}
+    g = {"title": None, "v": 0, "nodes": {}, "order": [], "topics": [], "angle": None}
 
     def put(nid, title, deps, **extra):
         if nid in g["nodes"]:
@@ -98,7 +101,7 @@ def replay(events):
             n.update({k: v for k, v in extra.items() if v})
             return
         n = {"id": nid, "title": title or nid, "deps": list(deps), "state": "left",
-             "from": None, "by": None, "v": g["v"]}
+             "from": None, "by": None, "v": g["v"], "outs": []}
         n.update(extra)
         g["nodes"][nid] = n
         g["order"].append(nid)
@@ -121,6 +124,9 @@ def replay(events):
             for t in e.get("into", []):
                 if t in g["nodes"] and e["id"] not in g["nodes"][t]["deps"]:
                     g["nodes"][t]["deps"].append(e["id"])
+        elif op == "topic":
+            g["topics"] += [t for t in e.get("topics", []) if t not in g["topics"]]
+            g["angle"] = e.get("angle") or g["angle"]
         elif op == "state" and e.get("id") in g["nodes"]:
             g["nodes"][e["id"]]["state"] = e["state"]
         elif op == "next":
@@ -129,6 +135,9 @@ def replay(events):
                     n["state"] = "done"
             if e.get("id") in g["nodes"]:
                 g["nodes"][e["id"]]["state"] = "now"
+        elif op == "out" and e.get("id") in g["nodes"]:
+            have = {f["path"] for f in g["nodes"][e["id"]]["outs"]}
+            g["nodes"][e["id"]]["outs"] += [f for f in e.get("files", []) if f["path"] not in have]
         elif op == "drop" and e.get("id") in g["nodes"]:
             g["nodes"][e["id"]]["state"] = "dropped"
             g["nodes"][e["id"]]["by"] = e.get("by")
@@ -188,6 +197,38 @@ def csv(v):
     return [x.strip() for x in (v or "").split(",") if x.strip()]
 
 
+def slugs(v):
+    """Topic names compare across sessions and hosts, so keep one spelling: lower-case, '-' for spaces."""
+    return ["-".join(x.lower().split()) for x in csv(v)]
+
+
+def files(paths):
+    """Absolute paths of outputs that exist, so the dashboard can fetch them later from any cwd."""
+    out = []
+    for p in paths:
+        full = os.path.abspath(os.path.expanduser(p))
+        if not os.path.isfile(full):
+            die("파일 없음: " + p)
+        out.append({"path": full, "name": os.path.basename(full)})
+    return out
+
+
+def topics():
+    """Topics recorded by any session on this host, so a new session can reuse the same name."""
+    seen = {}
+    for sid in sorted(os.listdir(ROOT)) if os.path.isdir(ROOT) else []:
+        ev = os.path.join(ROOT, sid, "events.jsonl")
+        if not os.path.isfile(ev):
+            continue
+        g = replay(load(ev))
+        for t in g["topics"]:
+            seen.setdefault(t, []).append(g["title"] or sid[:8])
+    if not seen:
+        print("(주제 없음)")
+    for t, titles in sorted(seen.items()):
+        print("%-24s %d  %s" % (t, len(titles), " | ".join(titles[-3:])))
+
+
 def need(g, *ids):
     for i in ids:
         if i and i not in g["nodes"]:
@@ -200,6 +241,8 @@ def show(g):
         return
     mark = {"done": "✓", "now": "▶", "side": "∥", "blocked": "✗", "left": "·", "dropped": "—"}
     print("%s  (v%d)" % (g["title"] or "", g["v"]))
+    if g["topics"]:
+        print("  주제: %s%s" % (", ".join(g["topics"]), ("  — " + g["angle"]) if g["angle"] else ""))
     for nid in g["order"]:
         n = g["nodes"][nid]
         extra = []
@@ -211,6 +254,8 @@ def show(g):
             extra.append("→ " + n["by"])
         print(" %s %-12s %s%s" % (mark.get(n["state"], "?"), nid, n["title"],
                                  ("  [" + "; ".join(extra) + "]") if extra else ""))
+        for f in n.get("outs", []):
+            print("   %s ↳ %s" % (" " * 12, f["name"]))
 
 
 def main(argv):
@@ -223,11 +268,14 @@ def main(argv):
         print(__doc__)
         return
     cmd, args = argv[0], argv[1:]
+    if cmd == "topics":
+        return topics()
     g = replay(load())
 
     if cmd == "plan":
+        o, args = opts(args, ("topic",))
         if len(args) < 2:
-            die('plan "작업 제목" id:제목 ...')
+            die('plan "작업 제목" id:제목 ... [--topic 주제]')
         last = g["order"][-1] if g["order"] else None
         steps = parse_steps(args[1:], prev=last if g["order"] else None)
         known = set(g["nodes"]) | {s["id"] for s in steps}
@@ -235,6 +283,13 @@ def main(argv):
             need({"nodes": known, "order": sorted(known)}, *s["after"])
         append({"op": "plan", "title": args[0], "nodes": steps,
                 "cwd": os.getcwd()})
+        if o.get("topic"):
+            append({"op": "topic", "topics": slugs(o["topic"])})
+    elif cmd == "topic":
+        if not args or not slugs(args[0]):
+            die('topic 주제[,주제2] ["이 세션의 방향"]')
+        append({"op": "topic", "topics": slugs(args[0]), "angle": " ".join(args[1:]) or None})
+
     elif cmd == "replan":
         if len(args) < 2:
             die('replan "이유" id:제목 ...')
@@ -244,14 +299,27 @@ def main(argv):
             need({"nodes": known, "order": sorted(known)}, *s["after"])
         append({"op": "replan", "reason": args[0], "nodes": steps})
     elif cmd == "next":
+        o, args = opts(args, ("out",))
         if len(args) < 1:
-            die("next ID")
+            die("next ID [--out 파일,파일]")
         need(g, args[0])
+        if o.get("out"):   # outputs belong to the step(s) being finished
+            outs = files(csv(o["out"]))
+            for sid in [n["id"] for n in g["nodes"].values() if n["state"] == "now"] or [args[0]]:
+                append({"op": "out", "id": sid, "files": outs})
         append({"op": "next", "id": args[0], "note": " ".join(args[1:]) or None})
+    elif cmd == "out":
+        if len(args) < 2:
+            die("out ID 파일 [파일 ...]")
+        need(g, args[0])
+        append({"op": "out", "id": args[0], "files": files(args[1:])})
     elif cmd in ("now", "done", "side", "left", "block", "blocked"):
+        o, args = opts(args, ("out",))
         if not args:
             die("%s ID" % cmd)
         need(g, args[0])
+        if o.get("out"):
+            append({"op": "out", "id": args[0], "files": files(csv(o["out"]))})
         state = "blocked" if cmd.startswith("block") else cmd
         append({"op": "state", "id": args[0], "state": state, "note": " ".join(args[1:]) or None})
     elif cmd in ("derive", "add"):

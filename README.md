@@ -71,10 +71,15 @@ python3 $F next align        # qc is done, align starts
 python3 $F derive batch "Batch correction" --from count --into deg --reason "batch effect in PCA"
 python3 $F drop gsva --reason "not needed"
 python3 $F block deg "waiting for the sample sheet"
+python3 $F topic ncc-rnaseq "bulk DE"   # link sessions that work on the same subject
+python3 $F topics                       # topic names already used on this host
+python3 $F out deg report/DEG.pdf fig/volcano.png   # files a step produced; open them from the dashboard
 python3 $F show
 ```
 
-In the dashboard, click a panel to open it with its plan history, and drag a panel by its title row to reorder. `http://localhost:7777/?demo` shows the dashboard with sample data.
+The dashboard opens on the ontology view: every session on every host in one graph, coloured by host, with sessions that share a topic linked through it (and a dashed link between sessions whose plan titles overlap). Sessions that ended in the last 7 days stay on it, dimmed. Click a node to inspect it; `Open progress page` (or double-click) goes to that session's page at `/?s=<host>/<session-id>`.
+
+In the sessions view, click a panel to open it with its plan history, and drag a panel by its title row to reorder. `http://localhost:7777/?demo` shows the dashboard with sample data.
 
 `./fw selftest` runs every part against a throwaway home folder, without touching your own setup. Worth running once on a new machine.
 

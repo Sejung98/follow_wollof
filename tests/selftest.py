@@ -16,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -120,6 +121,7 @@ def t_follow(home, env):
         ["drop", "b", "--reason", "필요 없음", "--by", "c"],
         ["next", "x"],
         ["replan", "재계획 점검", "a:첫 단계", "x:갈라진 단계<a", "c:셋째<a,x", "d:넷째<c"],
+        ["topic", "NCC RNAseq", "벌크", "방향"],
     ]
     for args in steps:
         r = run([FOLLOW] + args, e)
@@ -141,6 +143,21 @@ def t_follow(home, env):
        n["a"]["state"] == "done" and n["x"]["state"] == "now" and n["b"]["state"] == "dropped"
        and n["b"]["by"] == "c" and n["x"]["from"] == "a" and "x" in n["c"]["deps"] and n["d"]["state"] == "left"
        and g["v"] == 2, {k: (v["state"], v["deps"]) for k, v in n.items()})
+    ok("주제 기록: slug 로 통일 + 방향", g["topics"] == ["ncc-rnaseq"] and g["angle"] == "벌크 방향", (g["topics"], g["angle"]))
+    rep = os.path.join(home, "report.pdf")
+    write(rep, "%PDF-1.4 selftest")
+    r = run([FOLLOW, "out", "x", rep], e)
+    g = follow.replay(read_events(home, "selftest"))
+    ok("out: 단계에 산출물 연결 (절대 경로)", r.returncode == 0 and [f["path"] for f in g["nodes"]["x"]["outs"]] == [rep],
+       r.stderr.decode("utf-8", "replace"))
+    r = run([FOLLOW, "out", "x", os.path.join(home, "없는.pdf")], e)
+    ok("out: 없는 파일은 거부", r.returncode == 1)
+    r = run([FOLLOW, "topics"], env)   # no session id: listing must still work
+    ok("topics 는 세션 밖에서도 목록 출력", r.returncode == 0 and "ncc-rnaseq" in r.stdout.decode("utf-8", "replace"),
+       r.stderr.decode("utf-8", "replace"))
+    r = run([FOLLOW, "plan", "주제 포함 계획", "p:첫", "--topic", "wgs-somatic"], dict(env, FOLLOW_SESSION_ID="selftest-topic"))
+    ok("plan --topic", r.returncode == 0 and follow.replay(read_events(home, "selftest-topic"))["topics"] == ["wgs-somatic"],
+       r.stderr.decode("utf-8", "replace"))
 
 
 def t_hook(home, env):
@@ -252,8 +269,15 @@ def t_agent(home, env):
     write(os.path.join(home, ".claude", "projects", "-selftest", "s-live.jsonl"),
           json.dumps({"type": "ai-title", "aiTitle": "자가 점검 세션"}, ensure_ascii=False) + "\n" +
           json.dumps({"type": "last-prompt", "lastPrompt": "점검해줘"}, ensure_ascii=False) + "\n")
+    out_file = os.path.join(home, "out", "결과.csv")
+    write(out_file, "gene,padj\nTP53,0.01\n")
     write(os.path.join(home, ".follow_wollof", "sessions", "s-live", "events.jsonl"),
-          json.dumps({"op": "plan", "title": "점검", "nodes": [{"id": "a", "title": "A"}]}, ensure_ascii=False) + "\n")
+          json.dumps({"op": "plan", "title": "점검", "nodes": [{"id": "a", "title": "A"}]}, ensure_ascii=False) + "\n" +
+          json.dumps({"op": "out", "id": "a", "files": [{"path": out_file, "name": "결과.csv"}]}, ensure_ascii=False) + "\n")
+    for sid, age in (("s-ended", 3600), ("s-old", 30 * 86400)):
+        ev = os.path.join(home, ".follow_wollof", "sessions", sid, "events.jsonl")
+        write(ev, json.dumps({"op": "plan", "title": "끝난 계획", "cwd": "/w", "nodes": [{"id": "a", "title": "A"}]}, ensure_ascii=False) + "\n")
+        os.utime(ev, (time.time() - age, time.time() - age))
     r = run([AGENT, "--once"], env)
     try:
         d = json.loads(r.stdout.decode("utf-8"))
@@ -265,7 +289,10 @@ def t_agent(home, env):
     live = [s for s in d["sessions"] if s["sessionId"] == "s-live"]
     ok("같은 세션 ID 는 하나로 (활동 중인 쪽)", len(live) == 1 and live[0]["name"] == "second", live)
     ok("제목·마지막 요청·계획 읽기", live and live[0]["title"] == "자가 점검 세션" and live[0]["lastPrompt"] == "점검해줘"
-       and len(live[0]["plan"]) == 1)
+       and len(live[0]["plan"]) == 2)
+    by = {s["sessionId"]: s for s in d["sessions"]}
+    ok("최근 종료된 세션은 ended 로, 7일 지난 것은 제외", by.get("s-ended", {}).get("status") == "ended"
+       and by["s-ended"]["cwd"] == "/w" and "s-old" not in by, sorted(by))
 
 
 def t_server(home, env):
@@ -291,7 +318,11 @@ def t_server(home, env):
         ok("로컬 세션이 화면 데이터에 나옴", h and h["sessions"][0]["sessionId"] == "s-live", h)
         code, body = get(base + "/")
         ok("페이지 제공", code == 200 and b"follow_wollof" in body)
-        ok("그래프 스크립트 제공", get(base + "/graph.js")[0] == 200)
+        ok("그래프 스크립트 제공", get(base + "/graph.js")[0] == 200 and get(base + "/ontology.js")[0] == 200)
+        q = lambda path: base + "/api/file?" + urllib.parse.urlencode({"host": "local", "path": path})
+        code, body = get(q(os.path.join(home, "out", "결과.csv")))
+        ok("산출물 파일 전달", code == 200 and body.startswith(b"gene,padj"), (code, body[:80]))
+        ok("기록되지 않은 경로는 거부", get(q(os.path.join(home, "fw-test.ini")))[0] == 403)
         ok("외부 도메인 이름 차단 (DNS rebinding)", get(base + "/api/state", host="evil.example:%d" % port)[0] == 403)
         with urllib.request.urlopen(base + "/events", timeout=5) as r:
             first = r.readline().decode("utf-8", "replace")
