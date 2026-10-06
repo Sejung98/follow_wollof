@@ -6,7 +6,7 @@ A small dashboard for keeping an eye on Claude Code sessions spread across sever
 
 I usually have a few long analyses running at once, on my laptop and on a couple of servers. Each Claude Code session starts by laying out a plan and then works through it, and after switching to something else for a while I lose track of which session is where. follow_wollof draws each session's plan as a graph and marks the step it is on, updating live. When a plan changes halfway, the new step shows up branching off the step it came from and joining the step it feeds into, so you can still tell how the plan got to where it is.
 
-![Dashboard with sample data](docs/screenshot.png)
+![Ontology view with sample data](docs/screenshot.png)
 
 *Sample data. The UI is in Korean.*
 
