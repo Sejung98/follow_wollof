@@ -75,7 +75,7 @@ export class Ontology {
     this.sel = null;
     this.hover = null;
     this.query = "";
-    this.layers = { hosts: true, projects: true, ended: true, similar: true };
+    this.layers = { hosts: true, projects: true, ended: false, similar: true };   // closed sessions: opt-in
     try { Object.assign(this.layers, JSON.parse(localStorage.getItem("fw-onto-layers") || "{}")); } catch (e) {}
     this.view = { x: 0, y: 0, k: 1 };
     this.alpha = 0;
@@ -91,7 +91,7 @@ export class Ontology {
         <div class="ox-sec"><h3>표시</h3>
           <label class="tg"><input type="checkbox" data-layer="hosts"><span></span>호스트 노드</label>
           <label class="tg"><input type="checkbox" data-layer="projects"><span></span>프로젝트 노드</label>
-          <label class="tg"><input type="checkbox" data-layer="ended"><span></span>종료된 세션 (7일)</label>
+          <label class="tg"><input type="checkbox" data-layer="ended"><span></span>닫은 세션도 보기 (최근 7일)</label>
           <label class="tg"><input type="checkbox" data-layer="similar"><span></span>제목이 비슷한 세션 연결</label>
         </div>
       </nav>
