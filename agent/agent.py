@@ -11,6 +11,7 @@ Each output line is one JSON object:
 import glob
 import json
 import os
+import re
 import socket
 import sys
 import time
@@ -26,6 +27,13 @@ TAIL_BYTES = 256 * 1024
 REGISTRY_KEYS = ("pid", "sessionId", "cwd", "name", "status", "waitingFor", "kind",
                  "entrypoint", "startedAt", "updatedAt", "statusUpdatedAt", "version")
 
+# the analysis folder a session is writing in: the latest daily_analysis/<date>/<slug> its transcript mentions
+WORK_RE = re.compile(r'((?:[A-Za-z]:)?/[^"\s\\]*?/daily_analysis/\d{4}-\d{2}-\d{2}/[A-Za-z0-9_.\-]+)')
+# data a session touched: paths in its transcript that pass through a data folder (00_raw_data/…, 02_data/…, _cohort/…),
+# cut to the dataset folder right below that data folder
+DATA_PATH_RE = re.compile(r'(?:(?:[A-Za-z]:)?/[^\s"\'`<>|;,()\[\]{}\\]*?/|(?<![\w./-]))(?:\d+[_-]?)?(?:raw[_-]?data|rawdata|data|datasets?|_?cohorts?)/[^\s"\'`<>|;,()\[\]{}\\/]+')
+WORK_EXT = ("r", "py", "sh", "ipynb", "rmd", "qmd", "nf", "smk", "tsv", "csv", "txt", "xlsx", "rds", "parquet", "json",
+            "png", "svg", "pdf", "jpg", "md", "html", "h5ad", "vcf")
 # transcript path -> (mtime, size, parsed) so unchanged transcripts are not re-read
 _transcript_cache = {}
 # plan events path -> (mtime, size, events)
@@ -70,11 +78,13 @@ def find_transcript(session_id):
 
 
 def _scan_head_fields(path):
-    """One full pass on first sight of a large transcript, for title/prompt lines only."""
+    """One full pass on first sight of a large transcript, for the title, last prompt and the user's requests."""
     title = prompt = None
+    asks = []
     with open(path, "rb") as fh:
         for raw in fh:
-            if b'"ai-title"' not in raw and b'"custom-title"' not in raw and b'"last-prompt"' not in raw:
+            ask = b'"type":"user"' in raw and b'"tool_result"' not in raw
+            if not ask and b'"ai-title"' not in raw and b'"custom-title"' not in raw and b'"last-prompt"' not in raw:
                 continue
             try:
                 d = json.loads(raw.decode("utf-8", "ignore"))
@@ -82,7 +92,19 @@ def _scan_head_fields(path):
                 continue
             title = d.get("customTitle") or d.get("aiTitle") or title
             prompt = d.get("lastPrompt") or prompt
-    return title, prompt
+            text = ask and not d.get("isMeta") and user_text((d.get("message") or {}).get("content"))
+            if text:
+                asks.append({"t": text, "at": d.get("timestamp")})
+    return title, prompt, asks[-8:]
+
+
+def merge_asks(old, new):
+    seen, out = set(), []
+    for a in old + new:
+        if (a.get("at"), a["t"]) not in seen:
+            seen.add((a.get("at"), a["t"]))
+            out.append(a)
+    return out[-8:]
 
 
 def parse_transcript(path):
@@ -91,18 +113,29 @@ def parse_transcript(path):
     cached = _transcript_cache.get(path)
     if cached and cached[0] == st.st_mtime and cached[1] == st.st_size:
         return cached[2]
-    out = {"mtime": st.st_mtime, "title": None, "lastPrompt": None}
+    out = {"mtime": st.st_mtime, "title": None, "lastPrompt": None, "workDir": None, "dataRefs": [], "todos": [], "agents": [], "asks": []}
     if cached:
         # values that may now sit before the tail window carry over
-        for k in ("title", "lastPrompt"):
+        for k in ("title", "lastPrompt", "workDir", "dataRefs", "todos", "agents", "asks"):
             out[k] = cached[2][k]
     elif st.st_size > TAIL_BYTES:
-        out["title"], out["lastPrompt"] = _scan_head_fields(path)
+        out["title"], out["lastPrompt"], out["asks"] = _scan_head_fields(path)
     with open(path, "rb") as fh:
         if st.st_size > TAIL_BYTES:
             fh.seek(st.st_size - TAIL_BYTES)
             fh.readline()  # drop the partial first line
         lines = fh.read().decode("utf-8", "ignore").splitlines()
+    tail = "\n".join(lines)
+    tasks, agents, asks = [], {}, []
+    for m in WORK_RE.finditer(tail):
+        if "/./" not in m.group(1) and "/../" not in m.group(1) and not m.group(1).startswith(("/.", "/..")):
+            out["workDir"] = m.group(1)
+    refs = dict(out["dataRefs"])
+    for m in DATA_PATH_RE.finditer(tail):
+        p = m.group(0)
+        if "daily_analysis/" not in p and "/." not in p:
+            refs[p] = refs.get(p, 0) + 1
+    out["dataRefs"] = sorted(refs.items(), key=lambda x: -x[1])[:30]
     for line in lines:
         try:
             d = json.loads(line)
@@ -115,9 +148,82 @@ def parse_transcript(path):
             out["title"] = d.get("customTitle") or out["title"]
         elif typ == "last-prompt":
             out["lastPrompt"] = d.get("lastPrompt") or out["lastPrompt"]
+        content = (d.get("message") or {}).get("content") if isinstance(d.get("message"), dict) else None
+        ask = typ == "user" and not d.get("isMeta") and user_text(content)
+        if ask:   # each request the user typed is one piece of work, in order
+            asks.append({"t": ask, "at": d.get("timestamp")})
+        for c in content if isinstance(content, list) else []:
+            if isinstance(c, dict) and c.get("type") == "tool_use":
+                work_item(out, tasks, agents, c)
+            elif isinstance(c, dict) and c.get("type") == "tool_result" and c.get("tool_use_id") in agents:
+                text = json.dumps(c.get("content"), ensure_ascii=False)[:400].lower()
+                agents[c["tool_use_id"]]["s"] = "now" if any(w in text for w in ("async", "background", "launched")) else "done"
+    if tasks:
+        out["todos"] = [t for t in tasks if t["s"] != "deleted"][:30]
+    if agents:
+        out["agents"] = list(agents.values())[-8:]
+    if asks:
+        out["asks"] = merge_asks(out["asks"], asks)
     if out["lastPrompt"] and len(out["lastPrompt"]) > 120:
         out["lastPrompt"] = out["lastPrompt"][:120] + "…"
     _transcript_cache[path] = (st.st_mtime, st.st_size, out)
+    return out
+
+
+def user_text(content):
+    """The words of a message the user typed: no tool results, commands, interruptions or system notes."""
+    if isinstance(content, list):
+        if any(isinstance(c, dict) and c.get("type") == "tool_result" for c in content):
+            return None
+        content = " ".join(c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text")
+    text = re.sub(r"<(system-reminder|ide_[a-z_]+|local-command-[a-z]+|command-[a-z]+)>.*?</\1>", "", str(content or ""), flags=re.S).strip()
+    text = re.sub(r"^\[Request interrupted[^\]]*\]\s*", "", text).strip()
+    if not text or text.startswith(("<", "Caveat:", "Stop hook feedback")):
+        return None
+    line = next((l.strip() for l in text.splitlines() if l.strip()), "")
+    return line[:120] + ("…" if len(line) > 120 else "")
+
+
+def work_item(out, tasks, agents, c):
+    """What the session is doing, from Claude Code's own records: its to-do list (TodoWrite, or TaskCreate and
+    TaskUpdate in newer versions) and the subagents it started (Agent). Status: done, now or left."""
+    name, inp = c.get("name"), c.get("input") or {}
+    state = {"completed": "done", "in_progress": "now", "pending": "left"}
+    if name == "TodoWrite" and isinstance(inp.get("todos"), list):
+        out["todos"] = [{"t": str(x.get("content") or x.get("activeForm") or "")[:120], "s": state.get(x.get("status"), "left")}
+                        for x in inp["todos"] if isinstance(x, dict)][:30]
+    elif name == "TaskCreate" and (inp.get("subject") or inp.get("description")):
+        tasks.append({"t": str(inp.get("subject") or inp.get("description"))[:120], "s": "left"})
+    elif name == "TaskUpdate":
+        try:
+            t = tasks[int(str(inp.get("taskId")).lstrip("#")) - 1]   # task ids count up from 1 in each session
+        except (ValueError, IndexError):
+            return
+        t["s"] = "deleted" if inp.get("status") == "deleted" else state.get(inp.get("status"), t["s"])
+        t["t"] = str(inp.get("subject") or t["t"])[:120]
+    elif name in ("Agent", "Task") and inp.get("description"):
+        agents[c.get("id")] = {"t": str(inp["description"])[:100], "s": "now"}
+
+
+def work_files(path, limit=300):
+    """[[relative path, size, mtime]] of the analysis folder a live session is writing, so the page can show
+    scripts, tables and figures appearing as they are made."""
+    out = []
+    for base, dirs, files in os.walk(path):
+        dirs[:] = sorted(d for d in dirs if not d.startswith((".", "__")))
+        if base[len(path):].count(os.sep) >= 3:
+            dirs[:] = []
+        for f in sorted(files):
+            if f.startswith(".") or f.rsplit(".", 1)[-1].lower() not in WORK_EXT:
+                continue
+            full = os.path.join(base, f)
+            try:
+                st = os.stat(full)
+            except OSError:
+                continue
+            out.append([os.path.relpath(full, path).replace(os.sep, "/"), st.st_size, int(st.st_mtime)])
+            if len(out) >= limit:
+                return out
     return out
 
 
@@ -173,6 +279,8 @@ def collect():
             except OSError:
                 pass
         s["plan"] = read_plan(reg["sessionId"])
+        if s.get("workDir") and os.path.isdir(s["workDir"]):
+            s["work"] = work_files(s["workDir"])
         sessions.append(s)
     cutoff = time.time() - ENDED_DAYS * 86400
     for path in glob.glob(os.path.join(FOLLOW_DIR, "*", "events.jsonl")):

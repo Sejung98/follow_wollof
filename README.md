@@ -57,6 +57,18 @@ Then:
 
 `./fw autostart on` starts the server at login (launchd, a systemd user service, or the Windows Startup folder).
 
+`./fw shortcut on` adds a launcher icon: `~/Applications` and the Dock on macOS, the Desktop and Start menu on Windows, the applications menu on Linux. It runs `fw window`, which starts the server if needed and opens the dashboard in a window of its own, without tabs or address bar (Chrome or Edge app mode; a browser tab otherwise). `--no-dock` leaves the Dock alone, `./fw shortcut off` removes it. Run it again after moving the folder.
+
+## Projects and notifications
+
+Add a `[project:<name>]` section per project to `config.ini`, one key per host naming that host's folder(s) for it (`data = 00_raw_data, 02_data` optionally names the data folders). The **Projects** view, the first tab, has two parts. The session ontology is a mind map: the project in the middle, its sessions from every computer on either side (the computer is only a label), and what each one is doing, taken from its follow plan, else Claude's own to-do list, else the requests it was given, with any subagents alongside. Steps flow outward from their session in causal order: a step sits after the steps it waits for, steps that can run together share a column, and the flow wraps to a new line every three columns. Boxes can be dragged anywhere; groups pushed into each other move aside. Running paths march, waiting ones pulse amber. Selecting a session shows which data it reads (data-folder paths in its conversation, or its report) flowing into it. The data catalog groups the project's data folders by kind (DNA, RNA, protein, spatial, single-cell, clinical, external cohorts, reference) with stage, formats, estimated samples, size, last change and the analyses that use each. Folders are re-read every 15 minutes or on `다시 읽기`; only names, sizes and dates are read.
+
+Click an analysis for its flow: the data it read (from the paths its `REPORT.md` quotes; guessed from names otherwise, drawn dashed), its plan steps or scripts, the tables and figures it made, and the checks it ended on with their verdicts. A finished analysis plays through once; a running one keeps data flowing into its current step and shows new files in its `daily_analysis/<date>/<slug>/` folder as they appear.
+
+**Questions & to-dos** collects what comes up in meetings or reading, per project and theme, on one page. Type or paste a memo; the Claude Code on this computer (a small model with tools and settings off, about a tenth of a cent) splits it into questions and to-dos and files each one. The list lives in one file on the `[todo] host`, so every desktop sees the same; checked items stay with their completion time and show with `완료한 것도 보기`. Analyses that look related are suggested under each item; linking one makes it open that analysis' flow. Meeting notes, comments and feedback trackers in the project folders are read for what is still open; imported items are checked against later analysis reports and the server's question log, and the ones clearly dealt with are closed with the report as evidence. Each project's server-side `analysis_backlog` and question log (`claude-daily-log/QUESTIONS.md`) show alongside, read-only.
+
+The server also raises a desktop notification (macOS Notification Center, a Windows toast that opens the session, or `notify-send`) when a session ends, stops after working for over a minute, waits for input, hits a blocked step, or stalls for two hours. Tune it in `[notify]` and try it with `./fw notify`.
+
 ## Usage
 
 New sessions start recording on their own once they take on something with several steps. In a session that was already open, type `/follow`.

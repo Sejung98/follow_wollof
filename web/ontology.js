@@ -4,7 +4,7 @@
 import { GraphView, dur } from "./graph.js";
 import { outputsHtml } from "./viewer.js";
 
-export const HOST_COLORS = ["#3FA6DA", "#D1980B", "#BD6BBD", "#00A396", "#7961DB", "#DB2C6F", "#29A634", "#946638"];
+export const HOST_COLORS = ["var(--h1)", "var(--h2)", "var(--h3)", "var(--h4)", "var(--h5)", "var(--h6)", "var(--h7)", "var(--h8)"];   // per theme, set in index.html
 const STATE_KO = { busy: "작업 중", waiting: "입력 대기", idle: "유휴", ended: "종료됨" };
 const STEP_KO = { done: "완료", now: "진행 중", side: "병행 중", blocked: "막힘", left: "대기", dropped: "제외" };
 const STOP = new Set(["분석", "정리", "작업", "확인", "검토", "the", "and", "for", "analysis", "of"]);

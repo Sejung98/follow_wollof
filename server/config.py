@@ -19,6 +19,9 @@ if not IS_WINDOWS:
     SSH_BASE += ["-o", "ControlMaster=no", "-o", "ControlPath=none"]
 
 
+NOTIFY_EVENTS = ("ended", "stopped", "waiting", "blocked", "stale")
+
+
 class ConfigError(Exception):
     pass
 
@@ -85,6 +88,8 @@ def load(path=None):
             "interval": float(get("agent", "interval", 2)),
             "ssh_options": SSH_BASE + split_options(get("ssh", "options", "") or ""),
             "hosts": [],
+            "projects": [],
+            "inventory_minutes": float(get("projects", "inventory_minutes", 15)),
         }
     except ValueError as e:
         raise ConfigError("설정 값 오류 (%s): %s" % (path, e))
@@ -113,4 +118,46 @@ def load(path=None):
     names = [h["name"] for h in cfg["hosts"]]
     if len(set(names)) != len(names):
         raise ConfigError("호스트 이름이 중복됩니다: %s" % ", ".join(names))
+
+    # [project:<name>]  <host> = folder[, folder ...]   data = glob[, glob ...]   (section order = screen order)
+    by_lower = {n.lower(): n for n in names}   # configparser lowercases keys
+    for sec in cp.sections():
+        if not sec.lower().startswith("project:"):
+            continue
+        p = {"name": sec.split(":", 1)[1].strip(), "folders": {}, "data": []}
+        for key, value in cp[sec].items():
+            items = [v.strip() for v in value.split(",") if v.strip()]
+            if key == "data":
+                p["data"] = items
+            elif key in by_lower:
+                p["folders"][by_lower[key]] = items
+            else:
+                raise ConfigError("[%s] 에 없는 호스트 이름: %s (호스트: %s)" % (sec, key, ", ".join(names)))
+        cfg["projects"].append(p)
+
+    # [todo] host = <host name>: where the questions and to-dos page keeps its list (one file, shared by every desktop)
+    t = cp["todo"] if cp.has_section("todo") else {}
+    host = (t.get("host") or "").strip()
+    if host and host.lower() not in by_lower:
+        raise ConfigError("[todo] host 가 [host:<이름>] 에 없습니다: %s (호스트: %s)" % (host, ", ".join(names)))
+    cfg["todo"] = {"host": by_lower.get(host.lower()) if host else None,
+                   "path": (t.get("path") or "~/.follow_wollof/todo.json").strip(),
+                   "classify": (t.get("classify") or "claude").strip().lower(),
+                   "model": (t.get("model") or "haiku").strip(),
+                   "judge_model": (t.get("judge_model") or "sonnet").strip(),
+                   "claude": (t.get("claude") or "").strip(),
+                   "import": (t.get("import") or "on").strip().lower() not in ("off", "false", "no", "0")}
+
+    n = cp["notify"] if cp.has_section("notify") else {}
+    try:
+        cfg["notify"] = {
+            "enabled": cp.getboolean("notify", "enabled", fallback=True),
+            "events": [e.strip() for e in (n.get("events") or ",".join(NOTIFY_EVENTS)).split(",") if e.strip()],
+            "min_busy": float(n.get("min_busy") or 60),
+        }
+    except ValueError as e:
+        raise ConfigError("[notify] 값 오류 (%s): %s" % (path, e))
+    bad = set(cfg["notify"]["events"]) - set(NOTIFY_EVENTS)
+    if bad:
+        raise ConfigError("[notify] events 는 %s 중에서 고릅니다: %s" % (", ".join(NOTIFY_EVENTS), ", ".join(sorted(bad))))
     return cfg

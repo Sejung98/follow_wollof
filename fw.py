@@ -2,6 +2,10 @@
 """follow_wollof launcher (macOS, Linux, Windows). Stdlib only.
 
   fw                      start the dashboard server if needed and open it in the browser
+  fw window               same, but in its own window like a program (Chrome / Edge app mode)
+  fw shortcut on|off [--no-dock]
+                          a launcher icon that runs `fw window`: macOS ~/Applications + Dock,
+                          Windows Desktop + Start menu, Linux applications menu
   fw init                 create config.ini from config.example.ini
   fw check                test every host in config.ini (connection, python, Claude sessions)
   fw deploy [--dry-run] [--uninstall] [host ...]
@@ -9,18 +13,23 @@
                           CLAUDE.md block) on the configured hosts
   fw start | stop | restart | status
   fw autostart on|off     start the server at login (launchd / systemd --user / Windows Startup)
+  fw notify               send a test desktop notification (the server sends one when a session ends,
+                          stops after a long run, waits for input, hits a blocked step or stalls; see [notify])
   fw pack                 build a shareable zip without personal files (config.ini, PLAN.md)
   fw selftest             test every part on this computer in a throw-away home folder (no real files touched)
 """
 import io
 import json
 import os
+import plistlib
+import shlex
 import shutil
 import signal
 import subprocess
 import sys
 import tarfile
 import time
+import urllib.parse
 import urllib.request
 import webbrowser
 import zipfile
@@ -41,9 +50,13 @@ UNIT = os.path.expanduser("~/.config/systemd/user/follow-wollof.service")
 STARTUP_DIR = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
 STARTUP_VBS = os.path.join(STARTUP_DIR, "follow_wollof.vbs")
 STARTUP_OLD = os.path.join(STARTUP_DIR, "follow_wollof.cmd")   # earlier versions
+ICONS = os.path.join(ROOT, "app")
+MAC_APP = os.path.expanduser("~/Applications/follow_wollof.app")
+DESKTOP_ENTRY = os.path.expanduser("~/.local/share/applications/follow_wollof.desktop")
+WINDOW_SIZE = "--window-size=1440,920"
 # Only these ship in `fw pack` (allowlist: notes, config.ini, logs or anything else dropped here stay out)
 PACK_FILES = ["README.md", "README.ko.md", "config.example.ini", "fw", "fw.cmd", "fw.py", ".gitignore"]
-PACK_DIRS = ["agent", "server", "web", "session", "tests", "docs"]
+PACK_DIRS = ["agent", "server", "web", "session", "tests", "docs", "app"]
 PACK_SKIP = {"__pycache__", ".DS_Store"}
 
 for _s in (sys.stdout, sys.stderr):
@@ -54,7 +67,11 @@ for _s in (sys.stdout, sys.stderr):
 
 
 def die(msg, code=1):
-    print(msg, file=sys.stderr)
+    if WIN and sys.stderr is None:   # started from the shortcut by pythonw: no console to print to
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(None, str(msg), "follow_wollof", 0x10)
+    else:
+        print(msg, file=sys.stderr)
     sys.exit(code)
 
 
@@ -197,6 +214,159 @@ def autostart(c, mode):
                 os.remove(UNIT)
             where = None
     print("로그인 시 자동 실행 켬: %s" % where if where else "자동 실행 끔")
+
+
+# ── window and launcher ─────────────────────────────────────────────────
+
+def chromium():
+    """A Chromium browser that can show a page as a window of its own (--app), or None."""
+    if MAC:
+        for name in ("Google Chrome", "Microsoft Edge", "Brave Browser", "Chromium"):
+            for base in ("/Applications", os.path.expanduser("~/Applications")):
+                path = os.path.join(base, name + ".app")
+                if os.path.isdir(path):
+                    return path
+    elif WIN:
+        for rel in (r"Google\Chrome\Application\chrome.exe", r"Microsoft\Edge\Application\msedge.exe"):
+            for var in ("ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"):
+                if os.environ.get(var) and os.path.exists(os.path.join(os.environ[var], rel)):
+                    return os.path.join(os.environ[var], rel)
+    else:
+        for exe in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge"):
+            if shutil.which(exe):
+                return shutil.which(exe)
+    return None
+
+
+def open_window(u):
+    """The dashboard without tabs or address bar, like a program; a browser tab when no Chromium browser exists."""
+    browser = chromium()
+    if not browser:
+        webbrowser.open(u)
+    elif MAC:   # -n hands the arguments over even when the browser is already running
+        subprocess.Popen(["open", "-na", browser, "--args", "--app=" + u, WINDOW_SIZE])
+    else:
+        subprocess.Popen([browser, "--app=" + u, WINDOW_SIZE], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, **({"creationflags": 0x00000008} if WIN else {"start_new_session": True}))
+
+
+def shortcut(args):
+    mode = args[0] if args else ""
+    if mode not in ("on", "off"):
+        die("fw shortcut on|off [--no-dock]")
+    if MAC:
+        changed = mac_app(mode == "on", "--no-dock" not in args)
+    elif WIN:
+        changed = win_links(mode == "on")
+    else:
+        changed = desktop_entry(mode == "on")
+    if mode == "on":
+        print("바로가기 만듦 (누르면 `fw window` 실행):" + "".join("\n  " + p for p in changed))
+    else:
+        print("바로가기 지움" + ("".join("\n  " + p for p in changed) if changed else ": 없었음"))
+
+
+def mac_app(on, dock):
+    """~/Applications/follow_wollof.app: a bundle whose only program is one shell line running `fw window`."""
+    existed = os.path.isdir(MAC_APP)
+    if existed:
+        shutil.rmtree(MAC_APP)
+    if not on:
+        tile = dock and dock_tile(False)
+        return ([MAC_APP] if existed else []) + ([tile] if tile else [])
+    contents = os.path.join(MAC_APP, "Contents")
+    os.makedirs(os.path.join(contents, "MacOS"))
+    os.makedirs(os.path.join(contents, "Resources"))
+    with open(os.path.join(contents, "Info.plist"), "wb") as fh:
+        plistlib.dump({"CFBundleName": "follow_wollof", "CFBundleDisplayName": "follow_wollof",
+                       "CFBundleIdentifier": "com.follow_wollof.launcher", "CFBundleExecutable": "follow_wollof",
+                       "CFBundleIconFile": "follow_wollof", "CFBundlePackageType": "APPL",
+                       "CFBundleShortVersionString": "1.0", "LSUIElement": True}, fh)   # no Dock bounce while it runs
+    exe = os.path.join(contents, "MacOS", "follow_wollof")
+    with open(exe, "w") as fh:   # Finder starts apps with a bare PATH; keep the one ssh and python are on now
+        fh.write("#!/bin/sh\nexport PATH=%s\nexec %s %s window\n" % (
+            shlex.quote(os.environ.get("PATH", "")), shlex.quote(sys.executable), shlex.quote(os.path.join(ROOT, "fw.py"))))
+    os.chmod(exe, 0o755)
+    shutil.copyfile(os.path.join(ICONS, "follow_wollof.icns"), os.path.join(contents, "Resources", "follow_wollof.icns"))
+    tile = dock and dock_tile(True)
+    return [MAC_APP] + ([tile] if tile else [])
+
+
+def dock_tile(add):
+    """Add or remove the launcher among the Dock's apps; returns what happened, or None if the Dock is unreadable."""
+    try:
+        prefs = plistlib.loads(subprocess.run(["defaults", "export", "com.apple.dock", "-"],
+                                              stdout=subprocess.PIPE, check=True).stdout)
+    except Exception:
+        return None
+    apps = prefs.get("persistent-apps", [])
+    mine = [t for t in apps if "/follow_wollof.app" in t.get("tile-data", {}).get("file-data", {}).get("_CFURLString", "")]
+    if add and mine:
+        return "Dock: 이미 있음"
+    if not add and not mine:
+        return None
+    if add:   # append only, the rest of the Dock is left as it is
+        tile = ("<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>%s</string>"
+                "<key>_CFURLStringType</key><integer>15</integer></dict><key>file-label</key><string>follow_wollof</string>"
+                "</dict><key>tile-type</key><string>file-tile</string></dict>" % ("file://" + urllib.parse.quote(MAC_APP) + "/"))
+        subprocess.check_call(["defaults", "write", "com.apple.dock", "persistent-apps", "-array-add", tile])
+    else:
+        prefs["persistent-apps"] = [t for t in apps if t not in mine]
+        subprocess.run(["defaults", "import", "com.apple.dock", "-"], input=plistlib.dumps(prefs), check=True)
+    subprocess.call(["killall", "Dock"])
+    return "Dock: 추가" if add else "Dock: 뺌"
+
+
+def powershell(script, env=None):
+    return subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+                          env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **NO_WINDOW)
+
+
+def win_folders():
+    """Desktop and Start menu > Programs, as Windows reports them (a Desktop moved to OneDrive included)."""
+    r = powershell("[Console]::OutputEncoding = New-Object Text.UTF8Encoding $false; "
+                   "[Environment]::GetFolderPath('Desktop'); [Environment]::GetFolderPath('Programs')")
+    found = [l.strip() for l in r.stdout.decode("utf-8-sig", "replace").splitlines() if l.strip()]
+    if r.returncode or len(found) != 2:
+        found = [os.path.join(os.path.expanduser("~"), "Desktop"),
+                 os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Start Menu", "Programs")]
+    return found
+
+
+def win_link(path, target, arguments, icon):
+    """One .lnk through the Windows Script Host; values travel as environment variables, never pasted into code."""
+    r = powershell("$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:FW_LINK); $s.TargetPath = $env:FW_TARGET; "
+                   "$s.Arguments = $env:FW_ARGS; $s.WorkingDirectory = $env:FW_DIR; $s.IconLocation = $env:FW_ICON; "
+                   "$s.Description = 'follow_wollof dashboard'; $s.Save()",
+                   dict(os.environ, FW_LINK=path, FW_TARGET=target, FW_ARGS=arguments, FW_DIR=ROOT, FW_ICON=icon + ",0"))
+    if r.returncode or not os.path.exists(path):
+        die("바로가기를 만들지 못함: %s\n%s" % (path, clean_err(r.stderr)))
+
+
+def win_links(on):
+    links = [os.path.join(d, "follow_wollof.lnk") for d in win_folders()]
+    if not on:
+        gone = [p for p in links if os.path.exists(p)]
+        for p in gone:
+            os.remove(p)
+        return gone
+    for p in links:   # pythonw: no console window flashes when the shortcut is clicked
+        win_link(p, pythonw(), '"%s" window' % os.path.join(ROOT, "fw.py"), os.path.join(ICONS, "follow_wollof.ico"))
+    return links
+
+
+def desktop_entry(on):
+    if not on:
+        existed = os.path.exists(DESKTOP_ENTRY)
+        if existed:
+            os.remove(DESKTOP_ENTRY)
+        return [DESKTOP_ENTRY] if existed else []
+    os.makedirs(os.path.dirname(DESKTOP_ENTRY), exist_ok=True)
+    with open(DESKTOP_ENTRY, "w", encoding="utf-8") as fh:
+        fh.write("[Desktop Entry]\nType=Application\nName=follow_wollof\nComment=Claude Code 세션 진행 대시보드\n"
+                 'Exec="%s" "%s" window\nIcon=%s\nTerminal=false\nCategories=Development;\n'
+                 % (sys.executable, os.path.join(ROOT, "fw.py"), os.path.join(ICONS, "icon.png")))
+    return [DESKTOP_ENTRY]
 
 
 # ── hosts ───────────────────────────────────────────────────────────────
@@ -350,12 +520,18 @@ def main(argv):
         return init()
     if cmd == "pack":
         return pack()
+    if cmd == "shortcut":
+        return shortcut(argv[1:])
     if cmd == "selftest":
         sys.exit(subprocess.call([config.console_python(), os.path.join(ROOT, "tests", "selftest.py")]))
     c = cfg()
     if cmd == "open":
         start(c)
         webbrowser.open(url(c))
+        print(url(c))
+    elif cmd == "window":
+        start(c)
+        open_window(url(c))
         print(url(c))
     elif cmd == "start":
         start(c)
@@ -372,6 +548,12 @@ def main(argv):
         print("호스트: " + ", ".join("%s(%s)" % (h["name"], h["ssh"] or "local") for h in c["hosts"]))
     elif cmd == "check":
         check(c)
+    elif cmd == "notify":
+        import notify
+        if notify.send("알림 확인", "세션이 끝나거나 멈추면 이렇게 알려 드립니다", url(c)):
+            print("알림을 보냈습니다. 화면 구석에 안 보이면 시스템 설정의 알림에서 허용하세요 (macOS: 스크립트 편집기, Windows: Windows PowerShell).")
+        else:
+            die("알림을 보내지 못했습니다 — 위 오류 참고 (Linux 는 notify-send 필요)")
     elif cmd == "deploy":
         deploy(c, argv[1:])
     elif cmd == "autostart":
