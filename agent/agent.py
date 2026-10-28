@@ -23,8 +23,11 @@ FOLLOW_DIR = os.path.join(HOME, ".follow_wollof", "sessions")
 INTERVAL = float(sys.argv[sys.argv.index("--interval") + 1]) if "--interval" in sys.argv else 2.0
 PING_EVERY = 20.0
 ENDED_DAYS = 7  # sessions that closed this recently stay on the board (ontology links) as "ended"
+# Remote Control / routine sessions (entrypoint sdk-cli) keep their process after the work is done;
+# idle this long, they are treated as closed
+SDK_IDLE_HOURS = 6
 TAIL_BYTES = 256 * 1024
-REGISTRY_KEYS = ("pid", "sessionId", "cwd", "name", "status", "waitingFor", "kind",
+REGISTRY_KEYS = ("pid", "sessionId", "cwd", "name", "nameSource", "status", "waitingFor", "kind",
                  "entrypoint", "startedAt", "updatedAt", "statusUpdatedAt", "version")
 
 # the analysis folder a session is writing in: the latest daily_analysis/<date>/<slug> its transcript mentions
@@ -258,6 +261,7 @@ def collect():
     # A resumed session can run in a second process under the same sessionId;
     # keep one entry per session so the dashboard shows it once.
     by_id = {}
+    idle_cutoff = (time.time() - SDK_IDLE_HOURS * 3600) * 1000
     for f in glob.glob(os.path.join(SESSIONS_DIR, "*.json")):
         try:
             with open(f, encoding="utf-8") as fh:
@@ -265,6 +269,9 @@ def collect():
         except Exception:
             continue
         if not isinstance(reg, dict) or "sessionId" not in reg or not pid_alive(reg.get("pid", -1)):
+            continue
+        if (reg.get("entrypoint") == "sdk-cli" and reg.get("status") == "idle"
+                and (reg.get("statusUpdatedAt") or 0) < idle_cutoff):
             continue
         cur = by_id.get(reg["sessionId"])
         if cur is None or _liveliness(reg) > _liveliness(cur):

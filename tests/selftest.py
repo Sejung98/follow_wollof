@@ -281,6 +281,8 @@ def t_agent(home, env):
     ]
     for pid, reg in entries:
         write(os.path.join(sess, "%d.json" % pid), json.dumps(dict(reg, pid=pid, cwd=home)))
+    write(os.path.join(sess, "rc.json"), json.dumps({"sessionId": "s-rc-idle", "pid": os.getpid(), "cwd": home, "status": "idle",
+                                                     "entrypoint": "sdk-cli", "statusUpdatedAt": now - 7 * 3600 * 1000}))
     work = os.path.join(home, "proj", "daily_analysis", "2026-10-27", "deg_check")
     write(os.path.join(work, "01_scripts", "01_deg.R"), "x")
     write(os.path.join(work, "output", "deg.tsv"), "gene\n")
@@ -312,6 +314,7 @@ def t_agent(home, env):
         return
     ids = [s["sessionId"] for s in d["sessions"]]
     ok("실행 중인 프로세스만 표시 (종료된 pid 제외)", "s-dead" not in ids and "s-live" in ids, ids)
+    ok("오래 쉬는 Remote Control 세션은 제외", "s-rc-idle" not in ids, ids)
     live = [s for s in d["sessions"] if s["sessionId"] == "s-live"]
     ok("같은 세션 ID 는 하나로 (활동 중인 쪽)", len(live) == 1 and live[0]["name"] == "second", live)
     ok("제목·마지막 요청·계획 읽기", live and live[0]["title"] == "자가 점검 세션" and live[0]["lastPrompt"] == "점검해줘"
@@ -338,6 +341,10 @@ def t_projects(home, env):
     ok("계획을 세운 폴더 먼저", app.project_of(P, "lab", {"cwd": "/r", "plan": [{"op": "plan", "cwd": "/r/01_ncc/x"}]}) == "A")
     ok("Windows 경로는 대소문자·슬래시 무시", app.project_of(P, "pc", {"cwd": "c:/work/ncc/figs"}) == "A")
     ok("다른 호스트의 같은 경로는 아님", app.project_of(P, "pc", {"cwd": "/r/01_ncc"}) is None)
+    probe = os.path.join(home, "argv_probe.py")
+    write(probe, "import sys\nprint(len(sys.argv[1]))\n")
+    r = subprocess.run([PY, "-"], input=app.script_with_arg(probe, "A" * 20000), stdout=subprocess.PIPE)
+    ok("긴 인자도 stdin 으로 그대로 (ssh 명령줄 8KB 제한)", r.stdout.strip() == b"20000", r.stdout)
 
     proj = os.path.join(home, "inv-proj")
     for name in ("P1_tumor.sorted.bam", "P2_tumor.sorted.bam"):
@@ -404,7 +411,8 @@ def t_projects(home, env):
     ok("세션 종료 알림", [x["kind"] for x in got] == ["ended"], got)
     w.update("lab", [ses("d", "busy", 1300)], now=1300)
     ok("짧게 일하고 멈추면 알리지 않음", not w.update("lab", [ses("d", "idle", 1310)], now=1310))
-    old = datetime.datetime.fromtimestamp(1000 - 3 * 3600).astimezone().isoformat()
+    # epoch + offset: fromtimestamp() rejects negative times on Windows
+    old = (datetime.datetime.fromtimestamp(0, datetime.timezone.utc) + datetime.timedelta(seconds=1000 - 3 * 3600)).isoformat()
     w.update("h2", [ses("z", "busy", 900, [{"op": "plan", "title": "T", "nodes": [{"id": "x", "title": "정렬"}], "t": old},
                                            {"op": "next", "id": "x", "t": old}])], now=1000)
     ok("2시간 기록 없는 단계는 정체 알림", [x["kind"] for x in w.tick(now=1000)] == ["stale"])
@@ -477,6 +485,26 @@ def t_server(home, env):
         post(me, "/api/todo", {"do": "delete", "id": first})
         ok("지우기", [i["id"] for i in todo()] == ["Q-0002"], todo())
         ok("다른 사이트는 목록을 못 바꿈", post("http://evil.example", "/api/todo", {"do": "delete", "id": "Q-0002"}) == 403 and len(todo()) == 1)
+        hidden = lambda: json.loads(get(base + "/api/state")[1])["todo"].get("hidden", {})
+        post(me, "/api/todo", {"do": "hide", "ids": ["s:local/s-live"], "label": "점검"})
+        ok("숨기기: 목록 파일에 남아 모든 데스크탑이 같이 봄", hidden().get("s:local/s-live", {}).get("label") == "점검", hidden())
+        post(me, "/api/todo", {"do": "unhide", "ids": ["s:local/s-live"]})
+        ok("다시 보이기", "s:local/s-live" not in hidden(), hidden())
+        post(me, "/api/todo", {"do": "add", "items": [{"text": "노드에서 보낸 질문", "kind": "question", "links": ["s:local/s-live"]}]})
+        ok("노드에서 보낸 항목은 그 노드와 연결됨", any(i["text"] == "노드에서 보낸 질문" and i["links"] == ["s:local/s-live"] for i in todo()), todo())
+        themes = lambda: json.loads(get(base + "/api/state")[1])["todo"].get("sessionThemes", {})
+        post(me, "/api/todo", {"do": "themes", "by": "auto", "project": "테스트", "set": {"s:local/s-live": "DEG 재현"}})
+        ok("테마 옮기기: 페이지에서 고른 것은 사용자 분류로 남음", themes().get("s:local/s-live", {}).get("by") == "user"
+           and themes()["s:local/s-live"]["theme"] == "DEG 재현", themes())
+        store = os.path.join(home, ".follow_wollof", "todo.json")
+        auto = lambda t: base64.b64encode(json.dumps({"do": "themes", "by": "auto", "path": store, "set": {"s:local/s-live": t, "s:local/s-new": t}}).encode()).decode()
+        run([os.path.join(ROOT, "agent", "todo.py"), auto("자동 테마")], env)
+        ok("자동 분류는 사용자가 고른 테마를 덮지 않음", themes().get("s:local/s-live", {}).get("theme") == "DEG 재현"
+           or json.load(open(store, encoding="utf-8"))["sessionThemes"]["s:local/s-live"]["theme"] == "DEG 재현", themes())
+        ok("자동 분류는 새 세션에 테마를 붙임", json.load(open(store, encoding="utf-8"))["sessionThemes"].get("s:local/s-new", {}).get("by") == "auto")
+        ok("단계 바꾸기: 형식이 틀린 요청은 거부", post(me, "/api/step", {"host": "local", "session": "../x", "step": "a", "state": "done"}) == 400
+           and post(me, "/api/step", {"host": "local", "session": "s-live-0001", "step": "a", "state": "rm"}) == 400
+           and post("http://evil.example", "/api/step", {"host": "local", "session": "s-live-0001", "step": "a", "state": "done"}) == 403)
     finally:
         proc.terminate()
         try:

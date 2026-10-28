@@ -7,6 +7,10 @@ op = {"path": "~/.follow_wollof/todo.json", "do": "get" | "add" | "update" | "de
     add     {"items": [{"text", "kind": "question"|"todo", "project", "theme"}], "by": "<computer>"}
     update  {"id": "Q-0001", "set": {"done": true|null, "text", "kind", "project", "theme", "links", "dismissed"}}
     delete  {"id": "Q-0001"}
+    hide    {"ids": ["s:host/session", "r:host:path"], "label": "..."}: drop nodes from the project map (kept in "hidden")
+    unhide  {"ids": [...]}
+    themes  {"set": {"s:host/session": "테마" | null}, "by": "auto" | "user", "project": "..."}: the sub-analysis a session
+            belongs to on the project map; an automatic choice never replaces one the user made
     batch   {"ops": [update, ...]}: several updates under one lock (the processed-check marks many items at once)
     import  {"source": {"key", "version", "project", "title", "date", "path", "host"}, "items": [{"text", "kind", "theme",
              "ref", "done", "links"}]}: what a meeting note asks for. Skipped when that version of the note is already in;
@@ -62,7 +66,8 @@ def apply(db, op):
             db["items"].append({"id": "Q-%04d" % db["next"], "text": text[:600],
                                 "kind": it.get("kind") if it.get("kind") in ("question", "todo") else "todo",
                                 "project": it.get("project") or None, "theme": (str(it.get("theme") or "").strip()[:60] or None),
-                                "created": now(), "by": op.get("by"), "done": None, "links": [], "dismissed": []})
+                                "created": now(), "by": op.get("by"), "done": None, "dismissed": [],
+                                "links": [str(l) for l in it.get("links") or []][:20]})
             db["next"] += 1
     elif do == "update":
         for it in db["items"]:
@@ -70,6 +75,24 @@ def apply(db, op):
                 for k, v in (op.get("set") or {}).items():
                     if k in EDITABLE:
                         it[k] = now() if k == "done" and v is True else v
+    elif do in ("hide", "unhide"):
+        hidden = db.setdefault("hidden", {})
+        for i in [str(x) for x in op.get("ids") or []][:200]:
+            if do == "unhide":
+                hidden.pop(i, None)
+            else:
+                hidden[i] = {"t": now(), "by": op.get("by"), "label": str(op.get("label") or "")[:200]}
+    elif do == "themes":
+        themes = db.setdefault("sessionThemes", {})
+        by = "user" if op.get("by") == "user" else "auto"
+        for i, theme in list((op.get("set") or {}).items())[:300]:
+            if by == "auto" and (themes.get(i) or {}).get("by") == "user":
+                continue
+            theme = str(theme or "").strip()[:60]
+            if not theme:
+                themes.pop(i, None)
+            else:
+                themes[i] = {"theme": theme, "by": by, "project": op.get("project"), "t": now()}
     elif do == "delete":
         db["items"] = [it for it in db["items"] if it["id"] != op.get("id")]
     elif do == "batch":
@@ -116,7 +139,7 @@ def main():
         if fcntl:
             fcntl.flock(lock, fcntl.LOCK_EX)
         db = load(path)
-        if op.get("do") in ("add", "update", "delete", "import", "batch"):
+        if op.get("do") in ("add", "update", "delete", "import", "batch", "hide", "unhide", "themes"):
             save(path, apply(db, op))
     sys.stdout.buffer.write((json.dumps(db, ensure_ascii=False) + "\n").encode("utf-8"))
 

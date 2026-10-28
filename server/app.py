@@ -181,6 +181,13 @@ def run_host(state, cfg, host, watcher=None):
         backoff = min(backoff * 2, 60)
 
 
+def script_with_arg(path, arg):
+    """A script for `python3 -` over ssh with its argument on the first line: a long argument on the ssh command
+    line is cut at about 8 KB by Windows ssh."""
+    with open(path, "rb") as fh:
+        return ("import sys; sys.argv[1:] = [%r]\n" % arg).encode("ascii") + fh.read()
+
+
 def inventory_requests(cfg, host):
     return [{"folder": f, "data": p["data"]} for p in cfg["projects"] for f in p["folders"].get(host["name"], [])]
 
@@ -191,9 +198,8 @@ def run_inventory(cfg, host):
     if host["type"] == "local":
         cmd, stdin = [host["python"], INVENTORY, arg], None
     else:
-        with open(INVENTORY, "rb") as fh:
-            stdin = fh.read()
-        cmd = ["ssh"] + cfg["ssh_options"] + [host["ssh"], "nice -n 10 %s - %s" % (host["python"], arg)]
+        stdin = script_with_arg(INVENTORY, arg)
+        cmd = ["ssh"] + cfg["ssh_options"] + [host["ssh"], "nice -n 10 %s -" % host["python"]]
     r = subprocess.run(cmd, input=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300, **NO_WINDOW)
     if r.returncode:
         lines = [l for l in r.stderr.decode("utf-8", "ignore").splitlines() if l.strip() and not l.startswith("**")]
@@ -227,14 +233,96 @@ def run_todo(cfg, op):
     if host["type"] == "local":
         cmd, stdin = [host["python"], TODO, arg], None
     else:
-        with open(TODO, "rb") as fh:
-            stdin = fh.read()
-        cmd = ["ssh"] + cfg["ssh_options"] + [host["ssh"], "%s - %s" % (host["python"], arg)]
+        stdin = script_with_arg(TODO, arg)
+        cmd = ["ssh"] + cfg["ssh_options"] + [host["ssh"], "%s -" % host["python"]]
     r = subprocess.run(cmd, input=stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60, **NO_WINDOW)
     if r.returncode:
         lines = [l for l in r.stderr.decode("utf-8", "ignore").splitlines() if l.strip() and not l.startswith("**")]
         raise OSError(lines[-1] if lines else "exit %d" % r.returncode)
     return json.loads(r.stdout.decode("utf-8"))
+
+
+# a step's state from the page's context menu -> the follow.py command that records it in that session's plan
+STEP_CMD = {"done": "done", "now": "now", "left": "left", "blocked": "block"}
+SID_RE = re.compile(r"^[0-9A-Za-z-]{8,80}$")
+STEP_RE = re.compile(r"^[\w.-]{1,60}$")
+
+
+def set_step(cfg, host, sid, step, st):
+    """Record a step's new state the way the session itself would: follow.py on the session's host, as that session."""
+    args = [STEP_CMD[st], step, "대시보드에서 표시"]
+    if host["type"] == "local":
+        cmd = [host["python"], os.path.join(os.path.expanduser("~"), ".follow_wollof", "bin", "follow.py")] + args
+        env = dict(os.environ, FOLLOW_SESSION_ID=sid)
+    else:   # ~ stays unquoted so the remote shell expands it
+        cmd = ["ssh"] + cfg["ssh_options"] + [host["ssh"], "FOLLOW_SESSION_ID=%s %s ~/.follow_wollof/bin/follow.py %s" % (
+            shlex.quote(sid), host["python"], " ".join(shlex.quote(a) for a in args))]
+        env = None
+    r = subprocess.run(cmd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30, **NO_WINDOW)
+    if r.returncode:
+        lines = [l for l in r.stderr.decode("utf-8", "ignore").splitlines() if l.strip() and not l.startswith("**")]
+        raise OSError(lines[-1] if lines else "exit %d" % r.returncode)
+
+
+def session_label(s):
+    """The name the page shows for a session (the title Claude Code shows), with the plan it is on now."""
+    plan = next((e.get("title") for e in reversed(s.get("plan") or []) if e.get("op") in ("plan", "replan") and e.get("title")), None)
+    named = s.get("name") if s.get("nameSource") not in (None, "derived") else None
+    label = named or s.get("title") or plan or s.get("lastPrompt") or s.get("name") or s["sessionId"][:8]
+    return label + (" (지금: %s)" % plan if plan and plan != label else "")
+
+
+_theme_tried = {}   # session id -> when the last automatic sorting gave it nothing (tried again after an hour)
+
+
+def classify_sessions(state, cfg):
+    """File each session on a project map under a sub-analysis theme, reusing the project's themes where one fits.
+    Sessions the user has filed are left alone; new sessions are sorted as they appear."""
+    if cfg["todo"]["classify"] != "claude":
+        return 0
+    snap = state.snapshot()
+    themes = (snap["todo"] or {}).get("sessionThemes") or {}
+    hidden = (snap["todo"] or {}).get("hidden") or {}
+    todo_by_project = collections.defaultdict(list)
+    for h in snap["hosts"]:
+        for s in h["sessions"]:
+            sid = "s:%s/%s" % (h["name"], s["sessionId"])
+            if sid in themes or sid in hidden or not (s.get("plan") or s.get("status") != "ended"):
+                continue
+            if time.time() - _theme_tried.get(sid, 0) < 3600:
+                continue
+            todo_by_project[s.get("mainProject") or ""].append((sid, s))
+    filed = 0
+    for project, rows in todo_by_project.items():
+        rows = rows[:30]
+        known = sorted({v["theme"] for v in themes.values() if (v.get("project") or "") == project})
+        lines = []
+        for i, (sid, s) in enumerate(rows):
+            steps = [n.get("title") for e in s.get("plan") or [] if e.get("op") in ("plan", "replan") for n in e.get("nodes") or []][:6]
+            folder = os.path.basename(str(s.get("cwd") or "").replace("\\", "/").rstrip("/"))
+            lines.append("%d. %s | 폴더 %s%s" % (i + 1, session_label(s)[:120], folder, " | 단계: " + ", ".join(t for t in steps if t)[:200] if steps else ""))
+        prompt = ("'%s' 의 분석 세션들이다. 각 세션을 서브 분석 테마 하나로 묶는다.\n"
+                  "기존 테마: %s\n맞는 기존 테마가 있으면 글자 그대로 쓰고, 없으면 2~6 단어의 새 한국어 테마를 만든다.\n"
+                  "테마는 연구 질문이나 분석 대상 단위로 넓게 잡아 한 프로젝트에 3~8개 정도가 되게 한다.\n\n%s\n\n"
+                  "세션 순서대로 테마 문자열의 JSON 배열만 출력한다."
+                  % (project or "어느 프로젝트에도 속하지 않은 세션", ", ".join(known) or "없음", "\n".join(lines)))
+        try:
+            got = claude_json(cfg, prompt, "너는 연구 분석 세션을 주제별로 묶는 도구다. 요청한 JSON 만 출력한다.")
+        except Exception as e:
+            sys.stderr.write("session themes %s: %r\n" % (project, e))
+            got = []
+        if not isinstance(got, list) or len(got) != len(rows):
+            for sid, _ in rows:
+                _theme_tried[sid] = time.time()
+            continue
+        try:
+            db = run_todo(cfg, {"do": "themes", "by": "auto", "project": project,
+                                "set": {sid: str(t)[:60] for (sid, _), t in zip(rows, got) if str(t or "").strip()}})
+            state.set_todo(error=None, t=time.time(), **db)
+            filed += len(rows)
+        except Exception as e:
+            sys.stderr.write("session themes write: %r\n" % e)
+    return filed
 
 
 def todo_loop(state, cfg, notes):
@@ -244,6 +332,7 @@ def todo_loop(state, cfg, notes):
         try:
             db = run_todo(cfg, {"do": "get"})
             state.set_todo(error=None, t=time.time(), **db)
+            classify_sessions(state, cfg)   # new sessions on a project map get a sub-analysis theme
             if notes.is_set():   # a new data scan: new notes to read, new reports to check items against
                 notes.clear()
                 if cfg["todo"]["import"]:
@@ -594,7 +683,25 @@ def make_handler(state, bind="127.0.0.1", cfg=None, wake=None):
                 return self._send(200, "application/json", b'{"ok": true}')
             if urlsplit(self.path).path == "/api/todo":
                 return self._todo()
+            if urlsplit(self.path).path == "/api/step":
+                return self._step()
             self._send(404, "text/plain", b"not found")
+
+        def _step(self):
+            reply = lambda code, obj: self._send(code, "application/json; charset=utf-8", json.dumps(obj, ensure_ascii=False).encode())
+            try:
+                size = int(self.headers.get("Content-Length") or 0)
+                op = json.loads(self.rfile.read(min(size, MAX_BODY)).decode("utf-8")) if 0 < size <= MAX_BODY else None
+            except ValueError:
+                op = None
+            if not isinstance(op, dict) or op.get("host") not in hosts or op.get("state") not in STEP_CMD \
+                    or not SID_RE.match(str(op.get("session") or "")) or not STEP_RE.match(str(op.get("step") or "")):
+                return reply(400, {"ok": False, "error": "잘못된 요청"})
+            try:
+                set_step(cfg, hosts[op["host"]], op["session"], op["step"], op["state"])
+            except Exception as e:
+                return reply(502, {"ok": False, "error": "단계를 바꾸지 못함: %s" % e})
+            return reply(200, {"ok": True})
 
         def _todo(self):
             reply = lambda code, obj: self._send(code, "application/json; charset=utf-8", json.dumps(obj, ensure_ascii=False).encode())
@@ -605,7 +712,7 @@ def make_handler(state, bind="127.0.0.1", cfg=None, wake=None):
                 op = json.loads(self.rfile.read(min(size, MAX_BODY)).decode("utf-8")) if 0 < size <= MAX_BODY else None
             except ValueError:
                 op = None
-            if not isinstance(op, dict) or op.get("do") not in ("get", "add", "update", "delete", "capture", "review"):
+            if not isinstance(op, dict) or op.get("do") not in ("get", "add", "update", "delete", "capture", "review", "hide", "unhide", "themes"):
                 return reply(400, {"ok": False, "error": "잘못된 요청"})
             note = None
             if op["do"] == "review":   # long: runs on its own, the page sees the result in the next snapshots
@@ -614,7 +721,10 @@ def make_handler(state, bind="127.0.0.1", cfg=None, wake=None):
             if op["do"] == "capture":
                 items, note = classify(cfg, state, str(op.get("text") or "")[:20000])
                 op = {"do": "add", "items": items}
-            op["by"] = socket.gethostname()
+            if op["do"] == "themes":
+                op["by"] = "user"
+            else:
+                op["by"] = socket.gethostname()
             try:
                 db = run_todo(cfg, op)
             except Exception as e:

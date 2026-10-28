@@ -29,7 +29,14 @@ export class Todos {
     this.seen = null;       // item ids already drawn (new ones slide in)
     this.pending = new Map(); // id -> fields changed here and not yet confirmed by the store
     this.editing = null;
-    try { this.showDone = localStorage.getItem("fw-todo-done") === "1"; this.kind = localStorage.getItem("fw-todo-kind") || "all"; } catch (e) {}
+    this.proj = null;          // the project on the right (the index on the left lists them all)
+    this.q = "";               // search across every project
+    this.full = new Set();     // "project|theme" shown in full instead of its first few
+    this.sugOpen = new Set();  // items whose "looks related" suggestions are unfolded
+    try {
+      this.showDone = localStorage.getItem("fw-todo-done") === "1"; this.kind = localStorage.getItem("fw-todo-kind") || "all";
+      this.proj = localStorage.getItem("fw-todo-proj");
+    } catch (e) {}
     root.innerHTML = `<div class="td-page">
       <div class="td-top">
         <div class="td-title"><h1>질문과 할 일</h1><p class="td-where"></p></div>
@@ -41,11 +48,14 @@ export class Todos {
           <div class="td-seg" role="group" aria-label="종류"><button data-kind="all">모두</button><button data-kind="question">질문</button><button data-kind="todo">할 일</button></div>
           <label class="td-toggle"><input type="checkbox" class="td-done-toggle"><span></span>완료한 것도 보기</label>
           <button class="td-review" data-review title="회의·메모에서 온 항목 중 그 뒤 분석 보고서로 처리된 것을 찾아 완료로 표시">처리된 것 확인</button>
-          <span class="td-count"></span>
+          <label class="td-find"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
+            <input type="search" placeholder="찾기" aria-label="질문·할 일 찾기"></label>
         </div>
       </div>
-      <div class="td-grid"></div></div>`;
+      <div class="td-split"><nav class="td-index" aria-label="프로젝트와 테마"></nav><div class="td-grid"></div></div></div>`;
     this.grid = root.querySelector(".td-grid");
+    this.index = root.querySelector(".td-index");
+    root.querySelector(".td-find input").addEventListener("input", e => { this.q = e.target.value.trim().toLowerCase(); this.paint(); });
     this.form = root.querySelector(".td-cap");
     this.area = this.form.querySelector("textarea");
     root.querySelector(".td-done-toggle").checked = this.showDone;
@@ -100,35 +110,60 @@ export class Todos {
     this.root.querySelector(".td-review").disabled = !!rv?.running;
     where.classList.toggle("bad", !!T.error || !T.host);
     this.root.querySelectorAll(".td-seg button").forEach(b => b.classList.toggle("on", b.dataset.kind === this.kind));
-    const all = this.items(), open = all.filter(it => !it.done);
-    this.root.querySelector(".td-count").textContent = `열린 질문 ${open.filter(i => i.kind === "question").length} · 할 일 ${open.filter(i => i.kind === "todo").length} · 완료 ${all.length - open.length}`;
+    const all = this.items();
     const fresh = this.seen ? new Set(all.map(i => i.id).filter(id => !this.seen.has(id))) : new Set();
     this.seen = new Set(all.map(i => i.id));
-    const show = all.filter(it => (this.showDone || !it.done) && (this.kind === "all" || it.kind === this.kind));
-    const groups = [...(show.some(i => !i.project || !projects.includes(i.project)) ? [null] : []), ...projects];
-    const html = groups.map(p => this.projectHtml(p, show.filter(i => p ? i.project === p : !i.project || !projects.includes(i.project)), fresh, projects)).join("");
+    const q = this.q, hit = it => !q || (it.text + " " + (it.theme || "")).toLowerCase().includes(q);
+    const show = all.filter(it => (this.showDone || !it.done) && (this.kind === "all" || it.kind === this.kind) && hit(it));
+    const INBOX = "", of = it => it.project && projects.includes(it.project) ? it.project : INBOX;
+    const groups = [...(show.some(i => of(i) === INBOX) ? [INBOX] : []), ...projects];
+    const by = new Map(groups.map(p => [p, show.filter(i => of(i) === p)]));
+    if (!groups.includes(this.proj) || (q && !by.get(this.proj).length)) this.proj = groups.find(p => by.get(p).length) ?? groups[0] ?? null;
+    const themesOf = list => {
+      const m = new Map();
+      for (const it of list) { const k = it.theme || "테마 없음"; if (!m.has(k)) m.set(k, []); m.get(k).push(it); }
+      return [...m].sort((a, b) => b[1].filter(i => !i.done).length - a[1].filter(i => !i.done).length || a[0].localeCompare(b[0]));
+    };
+    const ratio = list => {   // open questions | open to-dos | done, as one thin bar
+      const qn = list.filter(i => !i.done && i.kind === "question").length, tn = list.filter(i => !i.done && i.kind === "todo").length, dn = list.length - qn - tn;
+      return { qn, tn, dn, bar: list.length ? `<span class="td-bar" aria-hidden="true"><i class="q" style="flex:${qn}"></i><i class="t" style="flex:${tn}"></i><i class="d" style="flex:${dn}"></i></span>` : "" };
+    };
+    // every project first (each with its question/to-do bar), then the open project's themes to jump between
+    const idx = groups.map(p => {
+      const list = by.get(p), r = ratio(list), on = p === this.proj;
+      return `<button class="td-ip${on ? " on" : ""}${p === INBOX ? " inbox" : ""}" data-tproj="${esc(p)}" aria-current="${on}">
+          <span class="nm">${p === INBOX ? "어느 프로젝트인지 모름" : esc(p)}</span><b>${r.qn + r.tn}</b>${r.bar}</button>`;
+    }).join("") + (this.proj != null && by.get(this.proj)?.length ? `<h4 class="td-ih">테마</h4><div class="td-it">${themesOf(by.get(this.proj)).map(([t, l]) =>
+      `<button data-ttheme="${esc(t)}"><span>${esc(t)}</span><b>${l.filter(i => !i.done).length}</b></button>`).join("")}</div>` : "");
+    const tot = ratio(show);
+    const head = `<p class="td-legend"><span><i class="q"></i>질문 ${tot.qn}</span><span><i class="t"></i>할 일 ${tot.tn}</span>`
+      + `${this.showDone ? `<span><i class="d"></i>완료 ${tot.dn}</span>` : ""}${q ? `<span class="hit">"${esc(this.q)}" 찾은 결과</span>` : ""}</p>`;
+    if (this.index.dataset.h !== head + idx) { this.index.innerHTML = head + idx; this.index.dataset.h = head + idx; }
+    const html = this.proj == null ? `<p class="td-empty">${q ? "찾는 항목이 없습니다" : "아직 적어 둔 것이 없습니다. 위에 적어 넣어 보세요."}</p>`
+      : this.projectHtml(this.proj || null, by.get(this.proj) || [], fresh, projects, themesOf);
     if (this.grid.dataset.h !== html) {
       this.grid.innerHTML = html;
       this.grid.dataset.h = html;
     }
   }
 
-  projectHtml(p, items, fresh, projects) {
-    const backlog = p ? this.backlog(p) : [], log = p ? this.questionLog(p) : [];
-    if (!items.length && !backlog.length && !log.length && p) return `<section class="td-proj quiet"><h2>${esc(p)}</h2><p class="td-empty">아직 적어 둔 것이 없습니다</p></section>`;
-    const analyses = p ? this.opts.analyses(p) : [];
-    const themes = new Map();
-    for (const it of items) {
-      const k = it.theme || "테마 없음";
-      if (!themes.has(k)) themes.set(k, []);
-      themes.get(k).push(it);
-    }
-    const ordered = [...themes].sort((a, b) => b[1].filter(i => !i.done).length - a[1].filter(i => !i.done).length);
+  projectHtml(p, items, fresh, projects, themesOf) {
+    const found = x => !this.q || String(x.text || "").toLowerCase().includes(this.q);
+    const backlog = p ? this.backlog(p).filter(found) : [], log = p ? this.questionLog(p).filter(found) : [];
+    if (!items.length && !backlog.length && !log.length && p) return `<section class="td-proj quiet"><h2>${esc(p)}</h2><p class="td-empty">${this.q ?"이 프로젝트에는 찾는 항목이 없습니다" : "아직 적어 둔 것이 없습니다"}</p></section>`;
+    const analyses = p ? this.opts.analyses(p) : [], FEW = 3;
     const open = items.filter(i => !i.done);
     return `<section class="td-proj${p ? "" : " inbox"}"><h2>${p ? esc(p) : "어느 프로젝트인지 모름"}
-        <span>${p ? `질문 ${open.filter(i => i.kind === "question").length} · 할 일 ${open.filter(i => i.kind === "todo").length}` : "옮길 프로젝트를 고르세요"}</span></h2>
-      ${ordered.map(([theme, list]) => `<div class="td-theme"><h3>${esc(theme)}<b>${list.filter(i => !i.done).length}</b></h3>
-        <ul>${list.sort((a, b) => !!a.done - !!b.done || (b.created || "").localeCompare(a.created || "")).map(it => this.itemHtml(it, analyses, fresh, projects)).join("")}</ul></div>`).join("")}
+        <span>${p ? `질문 ${open.filter(i => i.kind === "question").length} · 할 일 ${open.filter(i => i.kind === "todo").length}` : "옮기기로 프로젝트를 고르세요"}</span></h2>
+      ${themesOf(items).map(([theme, list]) => {
+        const k = (p || "") + "|" + theme, all = this.q || this.full.has(k);
+        const sorted = list.sort((a, b) => !!a.done - !!b.done || (b.created || "").localeCompare(a.created || ""));
+        const shown = all ? sorted : sorted.slice(0, FEW), rest = sorted.length - shown.length;
+        return `<div class="td-theme" data-theme="${esc(theme)}"><h3><span>${esc(theme)}</span><b>${list.filter(i => !i.done).length}</b></h3>
+          <ul>${shown.map(it => this.itemHtml(it, analyses, fresh, projects)).join("")}</ul>
+          ${rest > 0 ? `<button class="td-moreit" data-full="${esc(k)}">${rest}개 더 보기</button>`
+            : !this.q && this.full.has(k) && sorted.length > FEW ? `<button class="td-moreit" data-full="${esc(k)}">접기</button>` : ""}</div>`;
+      }).join("")}
       ${backlog.length && this.kind !== "question" ? `<div class="td-theme backlog"><h3>분석 백로그<small>서버 · 읽기 전용</small><b>${backlog.length}</b></h3><ul>${backlog.map(b =>
         `<li class="td-item ro${b.priority ? "" : " np"}">${b.priority ? `<span class="td-pri ${esc(b.priority)}">${esc(b.priority)}</span>` : ""}<div class="td-body"><p class="td-text">${esc(b.text)}</p>
           ${b.id ? `<div class="td-meta">${esc(b.id)}</div>` : ""}</div></li>`).join("")}</ul></div>` : ""}
@@ -145,18 +180,19 @@ export class Todos {
       ${cls === "sug" ? `<button class="td-yes" data-link="${esc(a.id)}" title="이 질문과 연결">연결</button><button class="td-no" data-dismiss="${esc(a.id)}" title="관련 없음" aria-label="관련 없음">×</button>`
         : `<button class="td-no" data-unlink="${esc(a.id)}" title="연결 끊기" aria-label="연결 끊기">×</button>`}</span>`;
     const editing = this.editing === it.id;
-    return `<li class="td-item ${it.kind}${it.done ? " done" : ""}${fresh.has(it.id) ? " fresh" : ""}" data-id="${esc(it.id)}">
+    return `<li class="td-item ${it.kind}${it.done ? " done" : ""}${fresh.has(it.id) ? " fresh" : ""}" data-id="${esc(it.id)}" aria-label="${it.kind === "question" ? "질문" : "할 일"}">
       <button class="td-check" data-check aria-label="${it.done ? "다시 열기" : "완료"}" aria-pressed="${!!it.done}"><svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.2"/><path d="M5.6 9.2l2.3 2.3 4.4-4.9"/></svg></button>
       <div class="td-body">
         <p class="td-text" title="두 번 눌러 고치기">${esc(it.text)}</p>
-        <div class="td-meta"><span class="td-kind">${it.kind === "question" ? "질문" : "할 일"}</span>${it.source ? this.sourceHtml(it) : day(it.created)}${it.evidence ? `<button class="td-ev"${it.evidence.id.startsWith("q:") ? "" : ` data-open="${esc(it.evidence.id)}"`} title="${esc((it.evidence.why || "") + " — " + it.evidence.title)}">처리됨 · ${esc(day(it.evidence.date))} ${esc(cut(it.evidence.title, 22))}</button>`
-          : it.done ? ` · ${day(it.done)} 완료` : ""}<span class="td-id">${esc(it.ref || it.id)}</span>
-          <button class="td-more" data-edit>${editing ? "닫기" : "옮기기"}</button></div>
+        <div class="td-meta">${it.source ? this.sourceHtml(it) : `<span>${day(it.created)} 적음</span>`}${it.evidence ? `<button class="td-ev"${it.evidence.id.startsWith("q:") ? "" : ` data-open="${esc(it.evidence.id)}"`} title="${esc((it.evidence.why || "") + " — " + it.evidence.title)}">처리됨 · ${esc(day(it.evidence.date))} ${esc(cut(it.evidence.title, 22))}</button>`
+          : it.done ? `<span>${day(it.done)} 완료</span>` : ""}
+          ${sugg.length && !this.sugOpen.has(it.id) ? `<button class="td-sugb" data-sug title="이 항목과 관련 있어 보이는 분석">연결 후보 ${sugg.length}</button>` : ""}
+          <button class="td-more" data-edit title="${esc(it.ref || it.id)}">${editing ? "닫기" : "옮기기"}</button></div>
         ${editing ? `<div class="td-edit"><select data-f="project"><option value="">어느 프로젝트인지 모름</option>${projects.map(p => `<option${p === it.project ? " selected" : ""}>${esc(p)}</option>`).join("")}</select>
           <input data-f="theme" value="${esc(it.theme || "")}" placeholder="테마" list="td-themes-${esc(it.id)}"><datalist id="td-themes-${esc(it.id)}">${[...new Set(this.items().filter(x => x.project === it.project && x.theme).map(x => x.theme))].map(t => `<option value="${esc(t)}">`).join("")}</datalist>
           <select data-f="kind"><option value="question"${it.kind === "question" ? " selected" : ""}>질문</option><option value="todo"${it.kind === "todo" ? " selected" : ""}>할 일</option></select>
           <button data-save>저장</button><button class="danger" data-delete>지우기</button></div>` : ""}
-        ${links.length || sugg.length ? `<div class="td-links">${links.map(a => chip(a, "linked")).join("")}${sugg.length ? `<span class="td-sl">관련 있어 보임</span>${sugg.map(a => chip(a, "sug")).join("")}` : ""}</div>` : ""}
+        ${links.length || (sugg.length && this.sugOpen.has(it.id)) ? `<div class="td-links">${links.map(a => chip(a, "linked")).join("")}${sugg.length && this.sugOpen.has(it.id) ? `<span class="td-sl">관련 있어 보임</span>${sugg.map(a => chip(a, "sug")).join("")}` : ""}</div>` : ""}
       </div></li>`;
   }
 
@@ -251,6 +287,24 @@ export class Todos {
       this.note("회의·메모 항목을 그 뒤 분석 보고서와 맞춰 보는 중… (몇 분 걸릴 수 있음)");
       return this.send({ do: "review" }).catch(e => this.note(e.message, true));
     }
+    const tp = t.closest("[data-tproj]");
+    if (tp) {
+      this.proj = tp.dataset.tproj;
+      try { localStorage.setItem("fw-todo-proj", this.proj); } catch (err) {}
+      this.paint();
+      return this.root.closest("#todo")?.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    const tt = t.closest("[data-ttheme]");
+    if (tt) {   // jump to that theme and let it glow once so the eye lands on it
+      const sec = [...this.grid.querySelectorAll(".td-theme")].find(x => x.dataset.theme === tt.dataset.ttheme);
+      if (!sec) return;
+      sec.scrollIntoView({ behavior: document.documentElement.classList.contains("calm") ? "auto" : "smooth", block: "start" });
+      sec.classList.remove("flash"); void sec.offsetWidth; sec.classList.add("flash");
+      return;
+    }
+    const fl = t.closest("[data-full]");
+    if (fl) { const k = fl.dataset.full; if (this.full.has(k)) this.full.delete(k); else this.full.add(k); return this.paint(); }
+    if (t.closest("[data-sug]") && id) { this.sugOpen.add(id); return this.paint(); }
     const k = t.closest("[data-kind]");
     if (k) { this.kind = k.dataset.kind; try { localStorage.setItem("fw-todo-kind", this.kind); } catch (err) {} return this.paint(); }
     const open = t.closest("[data-open]");
@@ -261,7 +315,7 @@ export class Todos {
     if (!id) return;
     const it = this.items().find(i => i.id === id);
     if (t.closest("[data-check]")) {
-      if (!it.done && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      if (!it.done && !document.documentElement.classList.contains("calm")) {
         li.classList.add("checking");   // the tick draws and the line strikes through before it leaves the list
         return setTimeout(() => this.change(id, { done: true }), 650);
       }

@@ -23,7 +23,7 @@ const fit = (s, px, size = 13) => {   // the longest start of s that fits in px 
   return ch.join("") + "…";
 };
 const cut = (s, n) => [...String(s || "")].length > n ? [...String(s)].slice(0, n - 1).join("") + "…" : String(s || "");
-const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const reduced = () => document.documentElement.classList.contains("calm");   // the motion switch in the header
 
 export function bytes(n) {
   if (!n) return "0 B";
@@ -104,6 +104,7 @@ const ICON = {
   report: "M4.5 2.5h5l2.5 2.5v8.5h-7.5zM9.5 2.5V5H12",
   data: "M3.5 4.2c0-1 2-1.7 4.5-1.7s4.5.7 4.5 1.7v7.6c0 1-2 1.7-4.5 1.7s-4.5-.7-4.5-1.7zM3.5 4.2c0 1 2 1.7 4.5 1.7s4.5-.7 4.5-1.7",
   group: "M3.5 5h9M3.5 8h9M3.5 11h9",
+  theme: "M2.5 5.5l5.5-3 5.5 3-5.5 3zM2.5 8.5l5.5 3 5.5-3M2.5 11l5.5 3 5.5-3",
 };
 function route(pts, r = 7) {   // through right-angle corners, each rounded
   let d = `M${f1(pts[0][0])} ${f1(pts[0][1])}`;
@@ -133,6 +134,11 @@ export class Projects {
     this.openAn = null;             // analysis id while its flow window is open
     this.openCat = null;
     this.seenFiles = new Map();
+    this.hiding = new Map();        // id -> hidden, sent and not yet back from the list host
+    this.rethemed = new Map();      // session id -> theme, moved here and not yet back from the list host
+    this.showHidden = false;
+    this.showEnded = false;         // closed sessions stay off the map unless asked for (or found by the search)
+    this.findQ = "";
     this.prevDone = new Map();      // session id -> steps done at the last paint (the one that just finished gets a tick)
     this.drawn = new Set();         // projects drawn once (their entrance plays once)
     this.views = {};                // project -> {x, y, z} of the canvas
@@ -141,10 +147,14 @@ export class Projects {
       this.cur = localStorage.getItem("fw-proj"); this.tab = localStorage.getItem("fw-proj-tab") || "tree";
       this.views = JSON.parse(localStorage.getItem("fw-proj-view") || "{}");
       this.pos = JSON.parse(localStorage.getItem("fw-proj-pos") || "{}");
+      this.showEnded = localStorage.getItem("fw-proj-ended") === "1";
     } catch (e) {}
     root.innerHTML = `<nav class="pj-rail" aria-label="프로젝트"></nav>
       <section class="pj-stage"><div class="pj-head"></div>
-        <div class="pj-tree"><svg class="pj-svg" role="img"></svg></div><div class="pj-cat" hidden></div>
+        <div class="pj-tree"><svg class="pj-svg" role="img"></svg>
+          <div class="pj-find"><label><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
+            <input type="search" placeholder="세션 찾기 (꺼진 것도)" aria-label="세션 찾기"></label>
+            <button class="pj-ended" aria-pressed="false" title="꺼진 세션도 지도에 보이기"></button></div></div><div class="pj-cat" hidden></div>
         <div class="pj-zoom" role="group" aria-label="확대·축소"><button data-zoom="in" title="확대 (+)" aria-label="확대">+</button>
           <button data-zoom="out" title="축소 (−)" aria-label="축소">−</button><button data-zoom="fit" title="한 화면에 맞추기 (0)">맞춤</button>
           <button data-zoom="one" class="pj-zl" title="원래 크기">100%</button><button data-zoom="reset" title="옮긴 상자를 제자리로">정렬</button></div>
@@ -162,6 +172,13 @@ export class Projects {
     this.svg.addEventListener("dblclick", e => { const n = e.target.closest("[data-sel]"); if (n) this.openFlowAt(n.dataset.sel, n); });
     this.bindCanvas();
     this.scrim.addEventListener("click", () => this.closeCat());
+    this.bindMenu();
+    root.querySelector(".pj-find input").addEventListener("input", e => { this.findQ = e.target.value.trim().toLowerCase(); this.paint(true); });
+    root.querySelector(".pj-ended").addEventListener("click", () => {
+      this.showEnded = !this.showEnded;
+      try { localStorage.setItem("fw-proj-ended", this.showEnded ? "1" : "0"); } catch (e) {}
+      this.paint(true);
+    });
     document.addEventListener("keydown", e => {
       if (!this.root.offsetParent || e.target.closest("input, textarea")) return;
       if (e.key === "Escape") { if (this.openAn) this.closeCat(); else if (this.sel) { this.sel = null; this.paint(true); } }
@@ -213,13 +230,19 @@ export class Projects {
     }
     const list = [...cats.values()];
     for (const c of list) c.tok = catTokens(c.name);
-    const sess = this.sessions.filter(s => (p.other ? !s.mainProject : s.mainProject === p.name) && (s.g || s.status !== "ended"))
+    const hid = { ...(this.st.todo?.hidden || {}) };
+    for (const [id, on] of this.hiding) if (on) hid[id] = true; else delete hid[id];
+    const keep = id => this.showHidden || !hid[id];
+    const q = this.findQ, found = s => [s.label, s.planTitle, s.cwd, ...(s.g ? s.g.order.map(id => s.g.nodes[id].title) : [])].join(" ").toLowerCase().includes(q);
+    const mine = this.sessions.filter(s => (p.other ? !s.mainProject : s.mainProject === p.name) && (s.g || s.status !== "ended") && keep("s:" + s.key));
+    const endedN = mine.filter(s => s.status === "ended").length;
+    const sess = mine.filter(s => q ? found(s) : s.status !== "ended" || this.showEnded)
       .map(s => ({ kind: "session", id: "s:" + s.key, s, host: s.host, label: s.label,
                    report: s.workDir && reports.find(r => r.host === s.host && normp(r.path) === normp(s.workDir)),
                    text: [s.label, s.cwd, ...(s.g ? s.g.order.map(id => s.g.nodes[id].title) : [])].join(" ") }));
     const taken = new Set(sess.map(a => a.report?.id).filter(Boolean));
     reports.sort((a, b) => b.date.localeCompare(a.date) || b.mtime - a.mtime);
-    const reps = reports.filter(r => !taken.has(r.id)).map(r => ({ kind: "report", id: r.id, r, host: r.host,
+    const reps = reports.filter(r => !taken.has(r.id) && keep(r.id) && (!q || (r.slug + " " + (r.title || "")).toLowerCase().includes(q))).map(r => ({ kind: "report", id: r.id, r, host: r.host,
       label: r.title || r.slug.replace(/[_-]+/g, " "), text: r.slug + " " + (r.title || "") }));
     const read = paths => list.filter(c => c.parts.some(pt => paths.some(q => normp(q) === normp(pt.path) || normp(q).startsWith(normp(pt.path) + "/")))).map(c => c.key);
     for (const a of [...sess, ...reps]) {
@@ -234,7 +257,15 @@ export class Projects {
       if (!a.exact) a.cats = list.filter(c => uses(a.text, c.tok)).map(c => c.key);   // ... else guessed from names
     }
     findings.sort((a, b) => b.date.localeCompare(a.date));
-    return { p, cats: list, sessions: sess, reports: reps, findings, backlog, scans,
+    for (const a of [...sess, ...reps]) a.hidden = !!hid[a.id];
+    const th = this.st.todo?.sessionThemes || {};
+    for (const a of sess) {
+      if (this.rethemed.has(a.id) && this.rethemed.get(a.id) === (th[a.id]?.theme || null)) this.rethemed.delete(a.id);
+      const t = this.rethemed.has(a.id) ? this.rethemed.get(a.id) : th[a.id]?.theme;
+      a.theme = t || null;
+      a.themeBy = th[a.id]?.by || null;
+    }
+    return { p, cats: list, sessions: sess, reports: reps, findings, backlog, scans, hiddenN: Object.keys(hid).length, endedN,
              totals: { bytes: list.reduce((s, c) => s + c.bytes, 0), files: list.reduce((s, c) => s + c.files, 0) } };
   }
 
@@ -348,8 +379,15 @@ export class Projects {
 
   // where a node is: its place in the tree, moved by its own drag and by its parent's (a session takes its tasks along)
   at(it) {
-    const pos = this.pos[this.cur] || {}, own = pos[it.key] || [0, 0], up = it.carry ? pos[it.carry] || [0, 0] : [0, 0];
-    return { x: it.x + own[0] + up[0], y: it.y + own[1] + up[1], w: it.w, h: it.h };
+    const pos = this.pos[this.cur] || {};
+    let x = it.x, y = it.y;
+    for (let k = it.key, n = 0; k && n < 4; k = this.carryOf?.get(k), n++) { const o = pos[k] || [0, 0]; x += o[0]; y += o[1]; }
+    return { x, y, w: it.w, h: it.h };
+  }
+
+  rootOf(key) {   // the group a box moves with: its theme, else its session, else itself
+    for (let n = 0; this.carryOf?.get(key) && n < 4; n++) key = this.carryOf.get(key);
+    return key;
   }
 
   bindCanvas() {
@@ -367,7 +405,7 @@ export class Projects {
       }
     }, { passive: false });
     box.addEventListener("pointerdown", e => {
-      if (e.button !== 0 || e.target.closest(".chev, button")) return;
+      if (e.button !== 0 || e.target.closest(".chev, button, .pj-find")) return;
       const nd = e.target.closest(".nd[data-key]");
       const pos = this.pos[this.cur] ||= {};
       this.drag = nd ? { key: nd.dataset.key, sx: e.clientX, sy: e.clientY, o: [...(pos[nd.dataset.key] || [0, 0])], moved: false }
@@ -396,7 +434,7 @@ export class Projects {
       box.classList.remove("grabbing", "moving");
       if (d.moved) {
         this.dragged = true;
-        if (!d.pan) { const it = this.T.items.find(x => x.key === d.key); this.resolve(it?.carry || d.key, true); }
+        if (!d.pan) this.resolve(this.rootOf(d.key), true);
         this.saveView();
       }
     });
@@ -442,7 +480,8 @@ export class Projects {
   treeLayout(M) {
     // a mind map: the project in the middle, sessions to its right and left (whichever side is shorter), each
     // session's steps flowing outward from it in the order they depend on each other
-    const G = { PW: 210, PH: 70, SW: 276, SH: 58, TW: 224, TH: 30, TP: 38, CG: 40, GAP1: 70, GAP2: 44, VG: 22, ROWS: 6, PER: 3, LG: 26 };
+    const G = { PW: 210, PH: 70, SW: 276, SH: 58, TW: 224, TH: 30, TP: 38, CG: 40, GAP1: 70, GAP2: 44, VG: 22, ROWS: 6, PER: 3, LG: 26,
+                HW: 196, HH: 48, GAPH: 56, HG: 34 };
     const rank = a => ({ busy: 0, waiting: 1, idle: 2 })[a.s.status] ?? 3;
     const sessions = [...M.sessions].sort((a, b) => rank(a) - rank(b) || lastAct(b) - lastAct(a));
     const size = (n, h0) => {
@@ -461,26 +500,51 @@ export class Projects {
       const open = this.isOpen("reports", false), reps = open ? M.reports.slice(0, 12) : [];
       blocks.push({ kind: "group", reps, open, n: M.reports.length, h0: 48, ...size(reps.length, 48) });
     }
+    // with themes: one unit per theme (its sessions stacked beside it); without: one unit per session as before
+    const themed = M.sessions.some(a => a.theme);
+    const units = [];
+    if (themed) {
+      const byTheme = new Map();
+      for (const b of blocks) if (b.kind === "session") {
+        const t = b.a.theme || "분류 전";
+        if (!byTheme.has(t)) byTheme.set(t, []);
+        byTheme.get(t).push(b);
+      }
+      const live = list => list.filter(b => b.a.s.status === "busy" || b.a.s.status === "waiting").length;
+      for (const [name, list] of [...byTheme].sort((x, y) => (x[0] === "분류 전") - (y[0] === "분류 전") || live(y[1]) - live(x[1]) || y[1].length - x[1].length))
+        units.push({ theme: name, list, h: list.reduce((h, b) => h + b.h + G.VG, -G.VG) });
+      for (const b of blocks) if (b.kind === "group") units.push({ theme: null, list: [b], h: b.h });
+    } else for (const b of blocks) units.push({ theme: null, list: [b], h: b.h });
     const side = { right: [], left: [] }, height = { right: 0, left: 0 };
-    for (const b of blocks) {
+    for (const u of units) {
       const s = height.right <= height.left ? "right" : "left";
-      side[s].push(b);
-      height[s] += b.h + G.VG;
+      side[s].push(u);
+      height[s] += u.h + (u.theme ? G.HG : G.VG);
     }
+    const shift = themed ? G.HW + G.GAPH : 0;   // sessions move one column out to make room for the theme
+    const themes = [];
     for (const s of ["right", "left"]) {
       let y = -(height[s] - G.VG) / 2;
-      for (const b of side[s]) {
+      for (const u of side[s]) {
+        const y0 = y;
+        if (u.theme) themes.push({ name: u.theme, side: s, list: u.list,
+          x: s === "right" ? G.PW + G.GAP1 : -G.GAP1 - G.HW, y: y0 + Math.min(u.h, 400) / 2 - G.HH / 2 });
+        for (const b of u.list) {
         b.side = s;
         b.y = y;
-        b.sx = s === "right" ? G.PW + G.GAP1 : -G.GAP1 - G.SW;   // the session box
+        b.theme = u.theme;
+        b.sx = b.kind === "group" ? (s === "right" ? G.PW + G.GAP1 : -G.GAP1 - G.SW)
+          : s === "right" ? G.PW + G.GAP1 + shift : -G.GAP1 - shift - G.SW;   // the session box
         b.tx = c => s === "right" ? b.sx + G.SW + G.GAP2 + c * (G.TW + G.CG) : b.sx - G.GAP2 - G.TW - c * (G.TW + G.CG);
         b.ty = r => b.y + (b.h0 - G.TH) / 2 + r * G.TP;
         b.cell = b.kind === "session" ? i => [b.tx(b.pos[i].col), b.ty(b.pos[i].row) + b.lineY[b.pos[i].line]]
           : i => [b.tx(Math.floor(i / G.ROWS)), b.ty(i % G.ROWS)];
         y += b.h + G.VG;
+        }
+        if (u.theme) y += G.HG - G.VG;
       }
     }
-    return { G, blocks };
+    return { G, blocks, themes };
   }
 
   // the map as placed items (nodes) and links between them; drawn by renderTree, again on every drag
@@ -492,7 +556,11 @@ export class Projects {
       if (prev != null && done > prev) just.set(b.a.id, prev);
       this.prevDone.set(b.a.id, done);
     }
-    const sig = JSON.stringify([this.cur, L.blocks.map(b => b.kind === "group" ? ["g", b.open, b.n] : [b.a.id, b.a.s.status, b.open, b.steps.map(s => s.state), b.a.label]), [...just], this.sel]);
+    const sw = this.root.querySelector(".pj-ended");
+    sw.textContent = `꺼진 세션 ${M.endedN}개`;
+    sw.setAttribute("aria-pressed", String(this.showEnded));
+    sw.disabled = !M.endedN && !this.showEnded;
+    const sig = JSON.stringify([this.findQ, this.showEnded, this.cur, L.blocks.map(b => b.kind === "group" ? ["g", b.open, b.n] : [b.a.id, b.a.s.status, b.open, b.steps.map(s => s.state), b.a.label, b.a.hidden, b.theme]), [...just], this.sel, M.hiddenN, this.showHidden]);
     if (!force && sig === this.svg.dataset.sig) return;
     this.svg.dataset.sig = sig;
     const items = [], links = [];
@@ -500,6 +568,13 @@ export class Projects {
     items.push({ key: "p", col: 0, x: 0, y: -G.PH / 2, w: G.PW, h: G.PH, draw: (x, y) => this.node({ x, y, w: G.PW, h: G.PH, icon: "project", cls: "project", key: "p",
       attrs: `data-sel=""`, title: M.p.name, sub: run || wait ? [run && `실행 중 ${run}`, wait && `입력 대기 ${wait}`].filter(Boolean).join(" · ") : `세션 ${M.sessions.length}`,
       sub2: M.p.other ? "어느 프로젝트 폴더에도 없는 세션" : `데이터 ${M.cats.length}종 · 보고서 ${M.reports.length}` }) });
+    for (const t of L.themes) {
+      const key = "th:" + t.name, run = t.list.filter(b => b.a.s.status === "busy").length, wait = t.list.filter(b => b.a.s.status === "waiting").length;
+      items.push({ key, col: 1, x: t.x, y: t.y, w: G.HW, h: G.HH, draw: (x, y) => this.node({ x, y, w: G.HW, h: G.HH, icon: "theme",
+        cls: `theme${t.name === "분류 전" ? " unsorted" : ""}${run ? " t-run" : wait ? " t-wait" : ""}`, key, attrs: `data-theme="${esc(t.name)}"`, title: t.name,
+        sub: [`세션 ${t.list.length}`, run && `실행 중 ${run}`, wait && `입력 대기 ${wait}`].filter(Boolean).join(" · ") }) });
+      links.push({ from: "p", to: key, cls: run ? "run" : wait ? "wait" : t.list.some(b => b.a.s.status !== "ended") ? "idle" : "ended" });
+    }
     for (const b of L.blocks) {
       const cell = b.cell;
       if (b.kind === "group") {
@@ -509,7 +584,7 @@ export class Projects {
         b.reps.forEach((a, i) => {
           const key = "rep:" + a.id, [x, y] = cell(i);
           items.push({ key, carry: "reports", col: 2, x, y, w: G.TW, h: G.TH, draw: (x0, y0) => this.node({ x: x0, y: y0, w: G.TW, h: G.TH,
-            icon: "report", cls: `task report${this.sel === a.id ? " sel" : ""}`, key, attrs: `data-sel="${esc(a.id)}"`, title: a.label,
+            icon: "report", cls: `task report${this.sel === a.id ? " sel" : ""}${a.hidden ? " hid" : ""}`, key, attrs: `data-sel="${esc(a.id)}"`, title: a.label,
             sub: a.r.date.slice(5).replace("-", "."), small: true }) });
           links.push({ from: "reports", to: key, cls: "done" });
         });
@@ -518,19 +593,21 @@ export class Projects {
       const a = b.a, s = a.s, g = s.g, F = b.F, st = s.status;
       const prog = g && g.total ? g.done / g.total : null;
       const tasks = F.steps.filter(x => !x.agent), doneN = tasks.filter(x => x.state === "done").length;
-      const sub = [STATUS_KO[st], a.host, M.p.other ? normp(s.cwd).split("/").pop() : null,
+      const sub = [STATUS_KO[st], a.host,
         g ? `${g.done}/${g.total} 단계` : F.stepKind === "todo" ? `할 일 ${doneN}/${tasks.length}` : F.stepKind === "ask" ? `요청 ${tasks.length}개` : tasks.length ? `스크립트 ${tasks.length}` : "기록 없음",
-        st === "ended" ? ago(lastAct(a) / 1000) : ""].filter(Boolean).join(" · ");
-      items.push({ key: a.id, col: 1, x: b.sx, y: b.y, w: G.SW, h: G.SH, draw: (x, y) => this.node({ x, y, w: G.SW, h: G.SH, icon: "session",
-        cls: `session s-${st}${this.sel === a.id ? " sel" : ""}`, key: a.id, attrs: `data-sel="${esc(a.id)}"`, title: a.label, sub, progress: prog,
+        st === "ended" ? ago(lastAct(a) / 1000) : "",
+        s.planTitle ? `지금: ${s.planTitle}` : M.p.other ? normp(s.cwd).split("/").pop() : null].filter(Boolean).join(" · ");
+      items.push({ key: a.id, carry: b.theme ? "th:" + b.theme : undefined, col: 1, x: b.sx, y: b.y, w: G.SW, h: G.SH, draw: (x, y) => this.node({ x, y, w: G.SW, h: G.SH, icon: "session",
+        cls: `session s-${st}${this.sel === a.id ? " sel" : ""}${a.hidden ? " hid" : ""}`, key: a.id, attrs: `data-sel="${esc(a.id)}"`, title: a.label, sub, progress: prog,
         chevron: b.n ? b.open : null, toggle: a.id }) });
-      links.push({ from: "p", to: a.id, cls: { busy: "run", waiting: "wait", idle: "idle", ended: "ended" }[st] });
+      links.push({ from: b.theme ? "th:" + b.theme : "p", to: a.id, cls: { busy: "run", waiting: "wait", idle: "idle", ended: "ended" }[st] });
       b.steps.forEach((x, i) => {
         const key = a.id + "#" + i, k = x.state === "now" ? (st === "busy" ? "run" : st === "waiting" ? "wait" : "now") : x.state === "blocked" ? "wait" : x.state;
         const since = x.state === "now" && x.since && st !== "ended" ? dur(Date.now() - x.since) : "";
         const [tx, ty] = cell(i);
         items.push({ key, carry: a.id, col: 2, x: tx, y: ty, w: G.TW, h: G.TH, draw: (x0, y0) => this.stepNode({ x: x0, y: y0, w: G.TW, h: G.TH,
-          st: k, title: x.title, n: x.n, outs: x.outs, since, stamp: just.has(a.id) && i >= just.get(a.id) && x.state === "done", key, attrs: `data-sel="${esc(a.id)}"` }) });
+          st: k, title: x.title, n: x.n, outs: x.outs, since, stamp: just.has(a.id) && i >= just.get(a.id) && x.state === "done", key,
+          attrs: `data-sel="${esc(a.id)}"${x.id ? ` data-step="${esc(x.id)}"` : ""}` }) });
         // a step hangs off the steps it waits for (the session itself for a first step); the link takes the state of
         // the step it leads into, so the solid part of the chain is what is done and the moving dash is what runs now
         const cls = k === "side" ? "now" : k === "more" ? "left" : k;
@@ -540,6 +617,7 @@ export class Projects {
       });
     }
     this.T = { items, links, empty: !M.sessions.length && !M.reports.length };
+    this.carryOf = new Map(items.filter(it => it.carry).map(it => [it.key, it.carry]));
     this.resolve(null, false);   // places the user moved earlier may now overlap a session that grew
     const fresh = !this.views[this.cur];
     this.renderTree(!this.drawn.has(this.cur) && !reduced());
@@ -550,7 +628,7 @@ export class Projects {
   blocks() {
     const roots = new Map();
     for (const it of this.T.items) {
-      const root = it.carry || it.key;
+      const root = this.rootOf(it.key);
       if (!roots.has(root)) roots.set(root, []);
       roots.get(root).push(this.at(it));
     }
@@ -622,7 +700,8 @@ export class Projects {
     const fade = c => first ? ` class="col" style="animation-delay:${c * 110}ms"` : "";
     this.svg.innerHTML = `<g class="vp"><g class="edges${first ? " enter" : ""}">${edges}</g><g class="edges hot${first ? " enter" : ""}">${hot}</g>
       ${cols.map((html, c) => `<g${fade(c)}>${html}</g>`).join("")}
-      ${empty ? `<text x="260" y="5" class="t-sub">이 프로젝트 폴더에서 돌아가는 세션도, 보고서도 아직 없습니다</text>` : ""}</g>`;
+      ${empty ? `<text x="260" y="5" class="t-sub">${this.findQ ? "찾는 세션이 없습니다" : this.M?.endedN && !this.showEnded
+        ? `지금 떠 있는 세션이 없습니다 · 왼쪽 위 '꺼진 세션 ${this.M.endedN}개' 로 지난 세션을 볼 수 있습니다` : "이 프로젝트 폴더에서 돌아가는 세션도, 보고서도 아직 없습니다"}</text>` : ""}</g>`;
     this.svg.setAttribute("aria-label", `${this.M?.p.name || ""} 세션 온톨로지`);
     this.applyView();
   }
@@ -651,7 +730,7 @@ export class Projects {
       : st === "more" ? `<path class="sm-more" d="M${cx - 5} ${cy}h.1M${cx} ${cy}h.1M${cx + 5} ${cy}h.1"/>` : `<circle class="sm-left" cx="${cx}" cy="${cy}" r="6.5"/>`;
     const right = since ? since : n ? `${n}개` : outs ? `산출물 ${outs}` : "";
     const room = w - 38 - (right ? textW(right, 11) + 14 : 8);
-    return `<g class="nd task t-${st}" ${attrs}${key ? ` data-key="${esc(key)}"` : ""}><rect class="box" x="${f1(x)}" y="${f1(y)}" width="${w}" height="${h}" rx="5"/>${mark}
+    return `<g class="nd task t-${st}" ${attrs}${key ? ` data-key="${esc(key)}"` : ""} tabindex="0"><rect class="box" x="${f1(x)}" y="${f1(y)}" width="${w}" height="${h}" rx="5"/>${mark}
       <text class="nt sm" x="${x + 30}" y="${f1(cy + 4.5)}">${esc(fit(title, room, 12.5))}<title>${esc(title)}</title></text>
       ${right ? `<text class="ns end" x="${x + w - 9}" y="${f1(cy + 4)}">${esc(right)}</text>` : ""}</g>`;
   }
@@ -823,7 +902,7 @@ export class Projects {
         return ds.flatMap(d => at.has(d) ? [at.get(d)] : need(d, seen));
       };
       steps = kept.map(id => { const n = g.nodes[id];
-        return { title: n.title, state: n.state, outs: n.outs.length, since: n.since, deps: [...new Set(need(id, new Set()))] }; });
+        return { id, title: n.title, state: n.state, outs: n.outs.length, since: n.since, deps: [...new Set(need(id, new Set()))] }; });
     } else if (s?.todos?.length) {
       stepKind = "todo";
       steps = chain(s.todos.map(t => ({ title: t.t, state: t.s === "now" && !live ? "done" : t.s })));
@@ -959,6 +1038,238 @@ export class Projects {
     if (first || this.win.dataset.sig !== sig) { this.win.innerHTML = html; this.win.dataset.sig = sig; }
   }
 
+
+  // ── context menu (right click, or the menu key / Shift+F10 on a focused box) ──────────────────────────────
+  bindMenu() {
+    this.menu = document.createElement("div");
+    this.menu.className = "pj-menu";
+    this.menu.setAttribute("role", "menu");
+    this.menu.hidden = true;
+    this.toast = document.createElement("div");
+    this.toast.className = "pj-toast";
+    this.toast.setAttribute("role", "status");
+    document.body.append(this.menu, this.toast);
+    this.svg.addEventListener("contextmenu", e => {
+      const nd = e.target.closest(".nd");
+      if (!nd) return;
+      e.preventDefault();
+      this.openMenu(nd, e.clientX, e.clientY);
+    });
+    this.svg.addEventListener("keydown", e => {
+      const nd = e.target.closest(".nd");
+      if (nd && (e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey))) {
+        e.preventDefault();
+        const r = nd.getBoundingClientRect();
+        this.openMenu(nd, r.left + 24, r.bottom - 4);
+      }
+    });
+    this.menu.addEventListener("click", e => {
+      const b = e.target.closest("button[data-i]");
+      if (!b || b.disabled) return;
+      const act = this.menuActs[+b.dataset.i];
+      if (!b.dataset.keep) this.closeMenu(true);
+      act();
+    });
+    this.menu.addEventListener("submit", e => {
+      e.preventDefault();
+      const f = e.target.closest("form[data-i]"), v = f.querySelector("input").value.trim(), act = this.menuActs[+f.dataset.i];
+      this.closeMenu(true);
+      act(v);
+    });
+    this.menu.addEventListener("keydown", e => {
+      const bs = [...this.menu.querySelectorAll("button:not(:disabled), input")], i = bs.indexOf(document.activeElement);
+      if (e.target.tagName === "INPUT" && e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Escape") return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); bs[(i + (e.key === "ArrowDown" ? 1 : -1) + bs.length) % bs.length]?.focus(); }
+      else if (e.key === "Home" || e.key === "End") { e.preventDefault(); bs[e.key === "Home" ? 0 : bs.length - 1]?.focus(); }
+      else if (e.key === "Escape" || e.key === "Tab") { e.preventDefault(); this.closeMenu(true); }
+    });
+    const away = e => { if (!this.menu.hidden && !this.menu.contains(e.target)) this.closeMenu(false); };
+    document.addEventListener("pointerdown", away, true);
+    window.addEventListener("blur", () => this.closeMenu(false));
+    window.addEventListener("resize", () => this.closeMenu(false));
+    this.svg.addEventListener("wheel", () => this.closeMenu(false), { passive: true });
+  }
+
+  menuItems(nd) {
+    const M = this.M, id = nd.dataset.sel, key = nd.dataset.key;
+    const a = id ? [...M.sessions, ...M.reports].find(x => x.id === id) : null;
+    const copy = (label, text) => ({ label, icon: "copy", run: () => this.copy(text, label) });
+    const todo = (text, links) => [
+      { label: "질문으로 보내기", icon: "ask", run: () => this.toTodo(text, "question", links) },
+      { label: "할 일로 보내기", icon: "todo", run: () => this.toTodo(text, "todo", links) }];
+    const hide = x => x.hidden
+      ? { label: "다시 보이기", icon: "show", run: () => this.setHidden(x, false) }
+      : { label: "화면에서 숨기기", icon: "hide", danger: true, run: () => this.setHidden(x, true) };
+    if (nd.dataset.step != null && a) {   // a plan step: its state is written to that session's plan
+      const s = a.s, step = nd.dataset.step, cur = s.g?.nodes[step]?.state;
+      const set = (state, label, icon) => ({ label, icon, on: cur === state, disabled: cur === state, run: () => this.setStep(a, step, state, label) });
+      return { head: s.g?.nodes[step]?.title || step, sub: a.label, items: [
+        set("done", "완료로 표시", "done"), set("now", "진행 중으로 표시", "now"), set("blocked", "막힘으로 표시", "blocked"), set("left", "대기로 되돌리기", "left"),
+        "-", { label: "세션 진행 페이지 열기", icon: "open", run: () => this.opts.onOpen(s.key) },
+        copy("단계 이름 복사", s.g?.nodes[step]?.title || step),
+        "-", ...todo(`${s.g?.nodes[step]?.title || step} — ${a.label}`, [a.id])] };
+    }
+    if (key && key.includes("#") && a) {   // a step from a to-do list, the requests or scripts: nothing to set
+      const title = nd.querySelector("title")?.textContent || "";
+      return { head: title, sub: a.label, items: [{ label: "세션 진행 페이지 열기", icon: "open", disabled: !a.s, run: () => this.opts.onOpen(a.s.key) },
+        copy("이름 복사", title), "-", ...todo(`${title} — ${a.label}`, [a.id])] };
+    }
+    if (a?.kind === "session") {
+      const s = a.s, row = this.layout?.blocks.find(b => b.a?.id === a.id), q = x => `"${String(x || "").replace(/"/g, '\\"')}"`;
+      return { head: a.label, sub: `${STATUS_KO[s.status]} · ${a.host}`, items: [
+        { label: "진행 페이지 열기", icon: "open", run: () => this.opts.onOpen(s.key) },
+        { label: "흐름 크게 보기", icon: "flow", run: () => this.openFlowAt(a.id, nd) },
+        ...(row?.n ? [{ label: row.open ? "단계 접기" : "단계 펼치기", icon: "fold", run: () => { this.toggled.set(a.id, !row.open); this.paint(true); } }] : []),
+        "-", { label: a.theme ? `테마 옮기기 (지금: ${cut(a.theme, 14)}${a.themeBy === "auto" ? ", 자동" : ""})` : "테마 정하기", icon: "theme",
+               keep: true, run: () => this.openThemeMenu(nd, [a]) },
+        "-", copy("폴더 경로 복사", s.workDir || s.cwd), copy("세션 ID 복사", s.sessionId),
+        copy("재개 명령 복사", `cd ${q(s.cwd)}; claude --resume ${s.sessionId}`),
+        "-", ...todo(a.label, [a.id]), "-", hide(a)] };
+    }
+    if (a?.kind === "report") {
+      return { head: a.label, sub: `보고서 · ${a.host} · ${a.r.date}`, items: [
+        { label: "흐름 크게 보기", icon: "flow", run: () => this.openFlowAt(a.id, nd) },
+        copy("보고서 폴더 복사", a.r.path), "-", ...todo(a.label, [a.id]), "-", hide(a)] };
+    }
+    if (key?.startsWith("th:")) {   // a theme: rename it (every session in it moves), fold its sessions
+      const name = nd.dataset.theme, list = M.sessions.filter(x => (x.theme || "분류 전") === name);
+      const rows = this.layout?.blocks.filter(b => b.kind === "session" && list.includes(b.a)) || [];
+      const auto = list.filter(x => x.themeBy === "auto").length;
+      return { head: name, sub: `세션 ${list.length}${auto ? ` · 자동 분류 ${auto}` : ""}`, items: [
+        ...(name === "분류 전" ? [] : [{ input: true, icon: "theme", value: name, placeholder: "테마 이름", hint: "이름 바꾸기",
+          submit: v => { if (v && v !== name) this.setTheme(list, v, `'${cut(name, 16)}' 을 '${cut(v, 16)}' 로 바꿈`); } }]),
+        { label: "세션 단계 모두 펼치기", icon: "fold", run: () => { rows.forEach(b => this.toggled.set(b.a.id, true)); this.paint(true); } },
+        { label: "세션 단계 모두 접기", icon: "fold", run: () => { rows.forEach(b => this.toggled.set(b.a.id, false)); this.paint(true); } },
+        ...(auto ? [{ label: `자동 분류 ${auto}개 그대로 확정`, icon: "done", run: () => this.setTheme(list.filter(x => x.themeBy === "auto"), name, "확정함") }] : [])] };
+    }
+    if (key === "reports") {
+      const row = this.layout?.blocks.find(b => b.kind === "group");
+      return { head: "지난 분석 보고서", items: [{ label: row?.open ? "목록 접기" : "목록 펼치기", icon: "fold", run: () => { this.toggled.set("reports", !row?.open); this.paint(true); } }] };
+    }
+    if (key === "p") {
+      return { head: M.p.name, items: [
+        { label: this.showHidden ? "숨긴 항목 감추기" : `숨긴 항목 보기${M.hiddenN ? ` (${M.hiddenN})` : ""}`, icon: this.showHidden ? "hide" : "show",
+          disabled: !M.hiddenN && !this.showHidden, run: () => { this.showHidden = !this.showHidden; this.paint(true); } },
+        { label: this.showEnded ? "꺼진 세션 감추기" : `꺼진 세션 보기${M.endedN ? ` (${M.endedN})` : ""}`, icon: this.showEnded ? "hide" : "show",
+          disabled: !M.endedN && !this.showEnded, run: () => this.root.querySelector(".pj-ended").click() },
+        { label: "화면에 맞추기", icon: "fit", run: () => this.fitZoom() },
+        { label: "옮긴 상자 제자리로", icon: "fold", run: () => { delete this.pos[this.cur]; this.renderTree(false); this.fitZoom(); } },
+        { label: "데이터 다시 읽기", icon: "flow", run: () => fetch("/api/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+          .then(() => this.say("데이터를 다시 읽는 중")) }] };
+    }
+    return null;
+  }
+
+  openThemeMenu(nd, list) {
+    const cur = list[0].theme, names = [...new Set(this.M.sessions.map(x => x.theme).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const r = this.menuAt || { x: 0, y: 0 };
+    this.openMenu(nd, r.x, r.y, { head: "테마 옮기기", sub: cut(list[0].label, 40), items: [
+      ...names.map(n => ({ label: n, icon: "theme", on: n === cur, disabled: n === cur && list[0].themeBy === "user",
+                           run: () => this.setTheme(list, n, `'${cut(n, 20)}' 로 옮김`) })),
+      "-", { input: true, icon: "theme", placeholder: "새 테마 이름", hint: "새 테마", submit: v => v && this.setTheme(list, v, `새 테마 '${cut(v, 20)}' 로 옮김`) }] });
+  }
+
+  setTheme(list, theme, done) {
+    for (const a of list) this.rethemed.set(a.id, theme);
+    this.paint(true);
+    this.post("/api/todo", { do: "themes", project: this.M.p.other ? "" : this.M.p.name, set: Object.fromEntries(list.map(a => [a.id, theme])) })
+      .then(() => this.say(done), e => { for (const a of list) this.rethemed.delete(a.id); this.paint(true); this.fail(e.message); });
+  }
+
+  openMenu(nd, x, y, spec) {
+    const m = spec || this.menuItems(nd);
+    if (!m) return;
+    this.menuAt = { x, y };
+    this.menuFrom = nd;
+    this.menuActs = [];
+    const ICONS = {   // 16px line icons, same stroke as the map's
+      done: "M3.5 8.5l3 3 6-7", now: "M8 3.5a4.5 4.5 0 1 1-4.5 4.5", blocked: "M8 4v5M8 11.5v.2M2.5 13.5L8 2.5l5.5 11z",
+      left: "M8 3.5a4.5 4.5 0 1 0 0 9a4.5 4.5 0 1 0 0-9", open: "M6.5 3.5h-3v9h9v-3M9 3.5h3.5V7M12.5 3.5L7 9",
+      flow: "M2.5 8h3l2-4 2 8 2-4h2", fold: "M4 6l4 4 4-4", copy: "M5.5 5.5h7v7h-7zM3.5 10.5v-7h7",
+      ask: "M6 6.2a2 2 0 1 1 2.6 1.9c-.4.2-.6.5-.6 1v.6M8 11.5v.2", todo: "M3.5 4.5h1M3.5 8h1M3.5 11.5h1M6.5 4.5h6M6.5 8h6M6.5 11.5h6",
+      hide: "M2.5 8s2-4 5.5-4 5.5 4 5.5 4-2 4-5.5 4-5.5-4-5.5-4zM3.5 12.5l9-9", show: "M2.5 8s2-4 5.5-4 5.5 4 5.5 4-2 4-5.5 4-5.5-4-5.5-4zM8 6.5a1.5 1.5 0 1 1 0 3a1.5 1.5 0 1 1 0-3",
+      fit: "M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3", theme: "M2.5 5.5l5.5-3 5.5 3-5.5 3zM2.5 8.5l5.5 3 5.5-3M2.5 11l5.5 3 5.5-3" };
+    const rows = m.items.map(it => {
+      if (it === "-") return `<hr>`;
+      if (it.input) {   // a name typed into the menu: Enter applies it
+        const i = this.menuActs.push(it.submit) - 1;
+        return `<form class="mi" data-i="${i}"><svg viewBox="0 0 16 16"><path d="${ICONS[it.icon] || ""}"/></svg>
+          <input value="${esc(it.value || "")}" placeholder="${esc(it.placeholder)}" aria-label="${esc(it.hint)}" maxlength="60"><kbd>Enter</kbd></form>`;
+      }
+      const i = this.menuActs.push(it.run) - 1;
+      return `<button role="menuitem" data-i="${i}" class="${it.danger ? "danger" : ""}${it.on ? " on" : ""}"${it.disabled ? " disabled" : ""}${it.keep ? ` data-keep="1"` : ""}>
+        <svg viewBox="0 0 16 16"><path d="${ICONS[it.icon] || ""}"/></svg><span>${esc(it.label)}</span>${it.on ? `<i>지금</i>` : ""}</button>`;
+    }).join("");
+    this.menu.innerHTML = `<div class="mh"><b>${esc(cut(m.head, 40))}</b>${m.sub ? `<small>${esc(cut(m.sub, 48))}</small>` : ""}</div>${rows}`;
+    this.menu.hidden = false;
+    const w = this.menu.offsetWidth, h = this.menu.offsetHeight, pad = 8;
+    const left = Math.min(x, innerWidth - w - pad), top = y + h > innerHeight - pad ? Math.max(pad, y - h) : y;
+    this.menu.style.left = Math.max(pad, left) + "px";
+    this.menu.style.top = top + "px";
+    this.menu.style.transformOrigin = `${x - left}px ${top < y ? h : 0}px`;
+    this.menu.classList.remove("in");
+    void this.menu.offsetWidth;   // restart the entrance
+    this.menu.classList.add("in");
+    nd.classList.add("menu-on");
+    (spec ? this.menu.querySelector("button:not(:disabled), input") : this.menu.querySelector("button:not(:disabled)"))?.focus({ preventScroll: true });
+  }
+
+  closeMenu(refocus) {
+    if (this.menu.hidden) return;
+    this.menu.hidden = true;
+    this.menuFrom?.classList.remove("menu-on");
+    if (refocus) this.menuFrom?.focus?.({ preventScroll: true });
+    this.menuFrom = null;
+  }
+
+  say(text, undo) {
+    clearTimeout(this.toastT);
+    this.toast.innerHTML = `<span>${esc(text)}</span>${undo ? `<button>되돌리기</button>` : ""}`;
+    this.toast.classList.remove("err");
+    this.toast.classList.add("on");
+    if (undo) this.toast.querySelector("button").onclick = () => { this.toast.classList.remove("on"); undo(); };
+    const later = () => { this.toastT = setTimeout(() => this.toast.classList.remove("on"), undo ? 8000 : 2600); };
+    this.toast.onpointerenter = () => clearTimeout(this.toastT);   // stays while the pointer is on it
+    this.toast.onpointerleave = later;
+    later();
+  }
+
+  fail(text) { this.say(text); this.toast.classList.add("err"); }
+
+  async post(url, body) {
+    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const out = await r.json().catch(() => ({ ok: false, error: "응답을 읽지 못함" }));
+    if (!out.ok) throw new Error(out.error || "실패");
+    return out;
+  }
+
+  copy(text, label) {
+    navigator.clipboard.writeText(String(text || "")).then(() => this.say(label.replace(/ 복사$/, "") + " 복사함"), () => this.fail("복사하지 못함"));
+  }
+
+  toTodo(text, kind, links) {
+    const project = this.M.p.other ? null : this.M.p.name;
+    this.post("/api/todo", { do: "add", items: [{ text, kind, project, links }] })
+      .then(() => this.say(`${kind === "question" ? "질문" : "할 일"}에 추가함`), e => this.fail(e.message));
+  }
+
+  setHidden(a, on) {
+    this.hiding.set(a.id, on);   // leave (or come back) at once; the list host confirms within a moment
+    if (on && this.sel === a.id) this.sel = null;
+    this.paint(true);
+    const done = () => { this.hiding.delete(a.id); };
+    this.post("/api/todo", { do: on ? "hide" : "unhide", ids: [a.id], label: a.label })
+      .then(() => { done(); this.say(on ? `'${cut(a.label, 24)}' 숨김` : "다시 보임", on ? () => this.setHidden(a, false) : null); },
+            e => { done(); this.paint(true); this.fail(e.message); });
+  }
+
+  setStep(a, step, state, label) {
+    const nd = this.svg.querySelector(`.nd[data-step="${CSS.escape(step)}"][data-sel="${CSS.escape(a.id)}"]`);
+    nd?.classList.add("saving");
+    this.post("/api/step", { host: a.s.host, session: a.s.sessionId, step, state })
+      .then(() => this.say(label.replace(/표시$/, "표시함").replace(/되돌리기$/, "되돌림")), e => this.fail(e.message))
+      .finally(() => setTimeout(() => this.svg.querySelector(`.nd.saving[data-step="${CSS.escape(step)}"]`)?.classList.remove("saving"), 2500));
+  }
 
   // ── input ─────────────────────────────────────────────────────────────
   click(e) {
