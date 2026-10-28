@@ -551,7 +551,7 @@ def main(argv):
     elif cmd == "notify":
         import notify
         if notify.send("알림 확인", "세션이 끝나거나 멈추면 이렇게 알려 드립니다", url(c)):
-            print("알림을 보냈습니다. 화면 구석에 안 보이면 시스템 설정의 알림에서 허용하세요 (macOS: 스크립트 편집기, Windows: Windows PowerShell).")
+            print("알림을 보냈습니다. 화면 구석에 안 보이면 시스템 설정의 알림에서 허용하세요 (macOS: 스크립트 편집기, Windows: follow_wollof).")
         else:
             die("알림을 보내지 못했습니다 — 위 오류 참고 (Linux 는 notify-send 필요)")
     elif cmd == "deploy":

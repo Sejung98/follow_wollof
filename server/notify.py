@@ -21,7 +21,9 @@ LIVE = ("busy", "idle", "waiting")
 STALE_AFTER = 2 * 3600       # same as STALE_MS in web/graph.js
 REPEAT_AFTER = 300           # the same session and kind is not announced twice within this many seconds
 BUNDLE = 3                   # more changes than this in one snapshot become one summary notification
-WIN_APP_ID = r"{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe"
+# Our own sender (registered per user before each toast) so it can be picked in Windows priority notifications.
+WIN_APP_ID = "follow_wollof"
+WIN_APP_ICON = os.path.join(config.ROOT, "app", "icon.png")
 NO_WINDOW = {"creationflags": 0x08000000} if config.IS_WINDOWS else {}
 
 
@@ -142,6 +144,9 @@ def send(title, body, url):
                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
         elif config.IS_WINDOWS:
             script = (
+                "$k = 'HKCU:\\Software\\Classes\\AppUserModelId\\' + $env:FW_APP; "
+                "New-Item $k -Force > $null; "
+                "Set-ItemProperty $k DisplayName 'follow_wollof'; Set-ItemProperty $k IconUri $env:FW_ICON; "
                 "[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null; "
                 "[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] > $null; "
                 "$x = New-Object Windows.Data.Xml.Dom.XmlDocument; "
@@ -153,7 +158,7 @@ def send(title, body, url):
                 "[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($env:FW_APP).Show("
                 "[Windows.UI.Notifications.ToastNotification]::new($x))")
             subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
-                           env=dict(os.environ, FW_TITLE=title, FW_BODY=body, FW_URL=url, FW_APP=WIN_APP_ID),
+                           env=dict(os.environ, FW_TITLE=title, FW_BODY=body, FW_URL=url, FW_APP=WIN_APP_ID, FW_ICON=WIN_APP_ICON),
                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=30,
                            check=True, **NO_WINDOW)
         elif shutil.which("notify-send"):

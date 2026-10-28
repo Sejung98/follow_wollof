@@ -227,7 +227,7 @@ enabled  = true
 events   = ended, stopped, waiting, blocked, stale
 min_busy = 60     ; stopped 는 이 초 이상 작업한 뒤 멈출 때만
 ```
-`fw notify` 로 시험 알림을 보냅니다. 안 보이면 시스템 설정의 알림에서 허용하세요 (macOS 는 "스크립트 편집기", Windows 는 "Windows PowerShell" 이름으로 옵니다). 서버를 다시 켠 직후의 상태는 알리지 않습니다.
+`fw notify` 로 시험 알림을 보냅니다. 안 보이면 시스템 설정의 알림에서 허용하세요 (macOS 는 "스크립트 편집기", Windows 는 "follow_wollof" 이름으로 옵니다). 서버를 다시 켠 직후의 상태는 알리지 않습니다.
 
 ## 명령 요약
 

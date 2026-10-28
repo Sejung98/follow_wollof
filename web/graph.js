@@ -56,7 +56,12 @@ export function replayPlan(events) {
       if (e.state === "now") g.nodes[e.id].since = t;
       if (e.state === "blocked") g.log.push({ t: e.t, kind: "blocked", text: `${g.nodes[e.id].title}${e.note ? " · " + e.note : ""}` });
     } else if (op === "next") {
-      for (const n of Object.values(g.nodes)) if (n.state === "now") n.state = "done";
+      // with parallel branches only the running steps this one waits for finish (finishing() in follow.py)
+      const seen = new Set(), todo = [e.id];
+      while (todo.length) { const n = g.nodes[todo.pop()];
+        for (const d of n ? [...n.deps, ...(n.from ? [n.from] : [])] : []) if (!seen.has(d)) { seen.add(d); todo.push(d); } }
+      const now = Object.values(g.nodes).filter(n => n.state === "now"), ends = now.filter(n => seen.has(n.id));
+      for (const n of ends.length ? ends : now) n.state = "done";
       if (g.nodes[e.id]) { g.nodes[e.id].state = "now"; g.nodes[e.id].since = t; }
     } else if (op === "drop" && g.nodes[e.id]) {
       g.nodes[e.id].state = "dropped";

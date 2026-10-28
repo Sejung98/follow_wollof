@@ -27,6 +27,9 @@ ENDED_DAYS = 7  # sessions that closed this recently stay on the board (ontology
 # idle this long, they are treated as closed
 SDK_IDLE_HOURS = 6
 TAIL_BYTES = 256 * 1024
+# a background agent, shell command or workflow reports its end later in a <task-notification> naming its tool call
+NOTE_RE = re.compile(r"<task-notification>.*?</task-notification>", re.S)
+NOTE_END = {"completed": "done", "failed": "blocked", "killed": "dropped", "stopped": "dropped"}
 REGISTRY_KEYS = ("pid", "sessionId", "cwd", "name", "nameSource", "status", "waitingFor", "kind",
                  "entrypoint", "startedAt", "updatedAt", "statusUpdatedAt", "version")
 
@@ -129,7 +132,8 @@ def parse_transcript(path):
             fh.readline()  # drop the partial first line
         lines = fh.read().decode("utf-8", "ignore").splitlines()
     tail = "\n".join(lines)
-    tasks, agents, asks = [], {}, []
+    # side work carries over by tool call id, so its end is still seen after its start left the tail window
+    tasks, agents, asks = [], {a["id"]: dict(a) for a in out["agents"] if a.get("id")}, []
     for m in WORK_RE.finditer(tail):
         if "/./" not in m.group(1) and "/../" not in m.group(1) and not m.group(1).startswith(("/.", "/..")):
             out["workDir"] = m.group(1)
@@ -155,12 +159,23 @@ def parse_transcript(path):
         ask = typ == "user" and not d.get("isMeta") and user_text(content)
         if ask:   # each request the user typed is one piece of work, in order
             asks.append({"t": ask, "at": d.get("timestamp")})
+        if typ == "user":
+            raw = content if isinstance(content, str) else " ".join(
+                c.get("text", "") for c in content or [] if isinstance(c, dict) and c.get("type") == "text")
+            for note in NOTE_RE.findall(raw):
+                tid, end = re.search(r"<tool-use-id>([^<]+)<", note), re.search(r"<status>(\w+)<", note)
+                if tid and end and tid.group(1) in agents:
+                    agents[tid.group(1)]["s"] = NOTE_END.get(end.group(1), "done")
         for c in content if isinstance(content, list) else []:
             if isinstance(c, dict) and c.get("type") == "tool_use":
-                work_item(out, tasks, agents, c)
+                work_item(out, tasks, agents, c, d.get("timestamp"))
             elif isinstance(c, dict) and c.get("type") == "tool_result" and c.get("tool_use_id") in agents:
+                a = agents[c["tool_use_id"]]
                 text = json.dumps(c.get("content"), ensure_ascii=False)[:400].lower()
-                agents[c["tool_use_id"]]["s"] = "now" if any(w in text for w in ("async", "background", "launched")) else "done"
+                if c.get("is_error"):
+                    a["s"] = "blocked"
+                elif a.get("k", "agent") == "agent":   # background commands and workflows end only by notification
+                    a["s"] = "now" if any(w in text for w in ("async", "background", "launched")) else "done"
     if tasks:
         out["todos"] = [t for t in tasks if t["s"] != "deleted"][:30]
     if agents:
@@ -187,9 +202,10 @@ def user_text(content):
     return line[:120] + ("…" if len(line) > 120 else "")
 
 
-def work_item(out, tasks, agents, c):
+def work_item(out, tasks, agents, c, at=None):
     """What the session is doing, from Claude Code's own records: its to-do list (TodoWrite, or TaskCreate and
-    TaskUpdate in newer versions) and the subagents it started (Agent). Status: done, now or left."""
+    TaskUpdate in newer versions) and the side work it started: subagents (Agent), background shell commands and
+    workflows. Status: done, now or left; side work can also end blocked (failed) or dropped (stopped)."""
     name, inp = c.get("name"), c.get("input") or {}
     state = {"completed": "done", "in_progress": "now", "pending": "left"}
     if name == "TodoWrite" and isinstance(inp.get("todos"), list):
@@ -205,7 +221,14 @@ def work_item(out, tasks, agents, c):
         t["s"] = "deleted" if inp.get("status") == "deleted" else state.get(inp.get("status"), t["s"])
         t["t"] = str(inp.get("subject") or t["t"])[:120]
     elif name in ("Agent", "Task") and inp.get("description"):
-        agents[c.get("id")] = {"t": str(inp["description"])[:100], "s": "now"}
+        agents[c.get("id")] = {"id": c.get("id"), "k": "agent", "t": str(inp["description"])[:100], "s": "now", "at": at}
+    elif name in ("Bash", "PowerShell") and inp.get("run_in_background"):
+        t = inp.get("description") or (str(inp.get("command") or "").strip().splitlines() or [""])[0]
+        agents[c.get("id")] = {"id": c.get("id"), "k": "bg", "t": str(t)[:100], "s": "now", "at": at}
+    elif name == "Workflow":
+        m = re.search(r"\bname\s*:\s*['\"]([^'\"]+)", str(inp.get("script") or ""))
+        t = inp.get("name") or (m and m.group(1)) or os.path.basename(str(inp.get("scriptPath") or "")) or "workflow"
+        agents[c.get("id")] = {"id": c.get("id"), "k": "wf", "t": str(t)[:100], "s": "now", "at": at}
 
 
 def work_files(path, limit=300):

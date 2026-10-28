@@ -170,6 +170,12 @@ def t_follow(home, env):
     r = run([FOLLOW, "topics"], env)   # no session id: listing must still work
     ok("topics 는 세션 밖에서도 목록 출력", r.returncode == 0 and "ncc-rnaseq" in r.stdout.decode("utf-8", "replace"),
        r.stderr.decode("utf-8", "replace"))
+    pe = dict(env, FOLLOW_SESSION_ID="selftest-par")
+    for args in (["plan", "병렬 계획", "a:A", "b:B<a", "c:C<a", "d:D<b"], ["next", "a"], ["next", "b"], ["now", "c"], ["next", "d"]):
+        run([FOLLOW] + args, pe)
+    n = follow.replay(read_events(home, "selftest-par"))["nodes"]
+    ok("병렬 갈래: next 는 그 단계가 기다리는 갈래만 끝냄", (n["b"]["state"], n["c"]["state"], n["d"]["state"]) == ("done", "now", "now"),
+       {k: v["state"] for k, v in n.items()})
     r = run([FOLLOW, "plan", "주제 포함 계획", "p:첫", "--topic", "wgs-somatic"], dict(env, FOLLOW_SESSION_ID="selftest-topic"))
     ok("plan --topic", r.returncode == 0 and follow.replay(read_events(home, "selftest-topic"))["topics"] == ["wgs-somatic"],
        r.stderr.decode("utf-8", "replace"))
@@ -296,6 +302,17 @@ def t_agent(home, env):
               {"type": "tool_use", "id": "t2", "name": "TodoWrite", "input": {"todos": [{"content": "정규화", "status": "completed"},
                                                                                    {"content": "DEG", "status": "in_progress"}]}},
               {"type": "tool_use", "id": "t3", "name": "Agent", "input": {"description": "문헌 찾기", "prompt": "x"}}]}}, ensure_ascii=False) + "\n" +
+          json.dumps({"type": "assistant", "message": {"content": [
+              {"type": "tool_use", "id": "t4", "name": "Bash", "input": {"command": "sort big.tsv", "description": "긴 정렬", "run_in_background": True}},
+              {"type": "tool_use", "id": "t5", "name": "Agent", "input": {"description": "배경 검토", "prompt": "x", "run_in_background": True}},
+              {"type": "tool_use", "id": "t6", "name": "Workflow", "input": {"script": "export const meta = { name: 'review-x', description: 'd' }"}}]}}) + "\n" +
+          json.dumps({"type": "user", "message": {"role": "user", "content": [
+              {"type": "tool_result", "tool_use_id": "t4", "content": "Command running in background with ID: b1"},
+              {"type": "tool_result", "tool_use_id": "t5", "content": "Async agent launched successfully."},
+              {"type": "tool_result", "tool_use_id": "t6", "content": "Workflow started"}]}}) + "\n" +
+          json.dumps({"type": "user", "message": {"role": "user", "content":
+              "<task-notification>\n<tool-use-id>t4</tool-use-id>\n<status>completed</status>\n</task-notification>"
+              "<task-notification>\n<tool-use-id>t5</tool-use-id>\n<status>failed</status>\n</task-notification>"}}) + "\n" +
           json.dumps({"type": "last-prompt", "lastPrompt": "점검해줘"}, ensure_ascii=False) + "\n")
     out_file = os.path.join(home, "out", "결과.csv")
     write(out_file, "gene,padj\nTP53,0.01\n")
@@ -319,9 +336,10 @@ def t_agent(home, env):
     ok("같은 세션 ID 는 하나로 (활동 중인 쪽)", len(live) == 1 and live[0]["name"] == "second", live)
     ok("제목·마지막 요청·계획 읽기", live and live[0]["title"] == "자가 점검 세션" and live[0]["lastPrompt"] == "점검해줘"
        and len(live[0]["plan"]) == 2)
-    ok("세션이 하는 일: 받은 요청 · Claude 의 할 일 · 에이전트", live and [a["t"] for a in live[0].get("asks", [])] == ["반응군 DEG 다시 돌려줘"]
+    ok("세션이 하는 일: 받은 요청 · 할 일 · 에이전트·백그라운드 명령·워크플로와 완료 알림", live and [a["t"] for a in live[0].get("asks", [])] == ["반응군 DEG 다시 돌려줘"]
        and [(t["t"], t["s"]) for t in live[0].get("todos", [])] == [("정규화", "done"), ("DEG", "now")]
-       and [(a["t"], a["s"]) for a in live[0].get("agents", [])] == [("문헌 찾기", "now")], live and {k: live[0].get(k) for k in ("asks", "todos", "agents")})
+       and [(a["t"], a["s"], a["k"]) for a in live[0].get("agents", [])] == [("문헌 찾기", "now", "agent"), ("긴 정렬", "done", "bg"),
+                                                                             ("배경 검토", "blocked", "agent"), ("review-x", "now", "wf")], live and {k: live[0].get(k) for k in ("asks", "todos", "agents")})
     ok("대화에서 건드린 데이터 경로", live and ["00_raw_data/02_RNA", 1] in [list(x) for x in live[0].get("dataRefs", [])], live and live[0].get("dataRefs"))
     ok("분석 폴더와 그 안의 파일 (실행 중 세션)", live and os.path.normpath(live[0].get("workDir") or "") == os.path.normpath(work)
        and sorted(f[0] for f in live[0].get("work") or []) == ["01_scripts/01_deg.R", "output/deg.tsv"], live and live[0].get("work"))

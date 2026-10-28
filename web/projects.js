@@ -6,6 +6,15 @@
 import { outputsHtml } from "./viewer.js";
 import { dur } from "./graph.js";
 
+// the order the user dragged the projects into (this browser only); projects not in it keep their config.ini order
+const ORDER_KEY = "fw-proj-order";
+const savedOrder = () => { try { return JSON.parse(localStorage.getItem(ORDER_KEY) || "[]"); } catch (e) { return []; } };
+export function orderProjects(list) {
+  const o = savedOrder(), rank = p => { const i = o.indexOf(p.name); return i < 0 ? o.length : i; };
+  return [...list].sort((a, b) => rank(a) - rank(b));
+}
+function saveOrder(names) { try { localStorage.setItem(ORDER_KEY, JSON.stringify(names)); } catch (e) {} }
+
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const rad = d => d * Math.PI / 180;
 const pol = (cx, cy, r, d) => [cx + r * Math.cos(rad(d)), cy + r * Math.sin(rad(d))];
@@ -169,6 +178,7 @@ export class Projects {
     this.win = root.querySelector(".pj-win");
     this.scrim = root.querySelector(".pj-scrim");
     root.addEventListener("click", e => this.click(e));
+    this.bindRailDrag();
     this.svg.addEventListener("dblclick", e => { const n = e.target.closest("[data-sel]"); if (n) this.openFlowAt(n.dataset.sel, n); });
     this.bindCanvas();
     this.scrim.addEventListener("click", () => this.closeCat());
@@ -193,7 +203,7 @@ export class Projects {
   update(sessions, st) {
     this.st = st;
     this.sessions = sessions;
-    this.projects = st.projects || [];
+    this.projects = orderProjects(st.projects || []);
     if (sessions.some(s => !s.mainProject && (s.g || s.status !== "ended")))
       this.projects = [...this.projects, { name: OTHER, folders: {}, data: [], other: true }];
     if (!this.projects.some(p => p.name === this.cur)) this.cur = this.projects[0]?.name || null;
@@ -298,11 +308,68 @@ export class Projects {
     const html = this.projects.map(p => {
       const ss = this.sessions.filter(s => (p.other ? !s.mainProject : s.mainProject === p.name) && s.status !== "ended");
       const run = ss.filter(s => s.status === "busy").length, wait = ss.filter(s => s.status === "waiting").length;
-      return `<button class="pj-p${p.name === this.cur ? " on" : ""}${p.other ? " other" : ""}${run ? " running" : wait ? " waiting" : ""}" data-proj="${esc(p.name)}">
+      return `<button class="pj-p${p.name === this.cur ? " on" : ""}${p.other ? " other" : ""}${run ? " running" : wait ? " waiting" : ""}" data-proj="${esc(p.name)}"${
+        p.other ? "" : ` draggable="true" title="끌어서 순서 바꾸기 (Alt+↑↓)"`}>
         <span class="nm">${run || wait ? `<i class="beacon" aria-hidden="true"></i>` : ""}${esc(p.name)}</span>
         <span class="live">${run ? `<i class="dot run"></i>실행 중 ${run}` : ""}${wait ? `<i class="dot wait"></i>입력 대기 ${wait}` : ""}${!run && !wait ? `<span class="quiet">세션 ${ss.length}개 · 쉬는 중</span>` : ""}</span></button>`;
     }).join("");
     if (this.rail.dataset.h !== html) { this.rail.innerHTML = html; this.rail.dataset.h = html; }
+  }
+
+  // drag a project up or down the rail (or Alt+arrow on the focused one) to reorder; "그 밖의 세션" stays last
+  bindRailDrag() {
+    const names = () => this.projects.filter(p => !p.other).map(p => p.name);
+    const move = (name, to) => {
+      const list = names().filter(n => n !== name);
+      list.splice(Math.max(0, Math.min(to, list.length)), 0, name);
+      saveOrder(list);
+      this.projects = orderProjects(this.projects);
+      this.paintRail();
+      this.rail.querySelector(`[data-proj="${CSS.escape(name)}"]`)?.focus();
+      this.opts.onOrder?.();
+    };
+    const clear = () => this.rail.querySelectorAll(".drop-a,.drop-b").forEach(b => b.classList.remove("drop-a", "drop-b"));
+    const slot = e => {   // the project under the pointer, and whether the drop lands above or below it
+      const b = e.target.closest(".pj-p[draggable]");
+      if (!b) return null;
+      const r = b.getBoundingClientRect();
+      return { b, below: e.clientY > r.top + r.height / 2 };
+    };
+    this.rail.addEventListener("dragstart", e => {
+      const b = e.target.closest(".pj-p[draggable]");
+      if (!b) return;
+      this.dragProj = b.dataset.proj;
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", this.dragProj);
+      b.classList.add("dragging");
+    });
+    this.rail.addEventListener("dragover", e => {
+      const s = this.dragProj && slot(e);
+      if (!s) return;
+      e.preventDefault();
+      clear();
+      if (s.b.dataset.proj !== this.dragProj) s.b.classList.add(s.below ? "drop-b" : "drop-a");
+    });
+    this.rail.addEventListener("dragleave", e => { if (!this.rail.contains(e.relatedTarget)) clear(); });
+    this.rail.addEventListener("drop", e => {
+      const s = this.dragProj && slot(e);
+      clear();
+      if (!s || s.b.dataset.proj === this.dragProj) return;
+      e.preventDefault();
+      const rest = names().filter(n => n !== this.dragProj);
+      move(this.dragProj, rest.indexOf(s.b.dataset.proj) + (s.below ? 1 : 0));
+    });
+    this.rail.addEventListener("dragend", () => {
+      clear();
+      this.rail.querySelector(".dragging")?.classList.remove("dragging");
+      this.dragProj = null;
+    });
+    this.rail.addEventListener("keydown", e => {
+      const b = e.target.closest(".pj-p[draggable]");
+      if (!b || !e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+      e.preventDefault();
+      move(b.dataset.proj, names().indexOf(b.dataset.proj) + (e.key === "ArrowUp" ? -1 : 1));
+    });
   }
 
   paintHead(M) {
@@ -909,7 +976,7 @@ export class Projects {
     } else if (s?.asks?.length) {
       stepKind = "ask";
       const last = s.asks.length - 1;
-      steps = chain(s.asks.map((x, i) => ({ title: x.t, state: i === last && (s.status === "busy" || s.status === "waiting") ? "now" : "done",
+      steps = chain(s.asks.map((x, i) => ({ title: x.t, t0: Date.parse(x.at) || 0, state: i === last && (s.status === "busy" || s.status === "waiting") ? "now" : "done",
                                             since: i === last ? Date.parse(x.at) || null : null })));
     } else {   // no plan: the scripts are the steps (grouped by sub-analysis when the folder has several)
       stepKind = "script";
@@ -922,7 +989,16 @@ export class Projects {
       steps = chain(steps);
       if (live && steps.length && s.status === "busy") steps[steps.length - 1].state = "now";
     }
-    for (const ag of s?.agents || []) steps.push({ title: "에이전트 · " + ag.t, state: ag.s === "now" && live ? "now" : "done", agent: true, deps: [] });
+    // side work (subagents, background commands, workflows) hangs off the step that was running when it started
+    const KIND = { agent: "에이전트", bg: "백그라운드", wf: "워크플로" }, END = { blocked: " (실패)", dropped: " (중단)" };
+    const began = steps.map(x => x.since || x.t0 || 0);
+    for (const ag of s?.agents || []) {
+      const t = Date.parse(ag.at || "") || 0;
+      let dep = -1;
+      if (t) began.forEach((b, i) => { if (b && b <= t && (dep < 0 || b >= began[dep])) dep = i; });
+      steps.push({ title: `${KIND[ag.k] || KIND.agent} · ${ag.t}${END[ag.s] || ""}`, agent: true, deps: dep >= 0 ? [dep] : [],
+                   state: ag.s === "now" ? (live ? "now" : "done") : ag.s === "dropped" ? "left" : ag.s });
+    }
     const now = Date.now() / 1000;
     const files = work ? work.filter(f => isTable(f[0]) || isFig(f[0])).sort((x, y) => x[2] - y[2]) : null;
     const recent = files ? files.slice(-6).reverse().map(f => ({ name: f[0], fresh: now - f[2] < 180 }))

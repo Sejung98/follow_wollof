@@ -84,6 +84,19 @@ def load(ev=None):
     return out
 
 
+def finishing(g, nid):
+    """The running steps `next nid` completes: with parallel branches only those nid waits for, else all of them."""
+    seen, todo = set(), [nid]
+    while todo:
+        n = g["nodes"].get(todo.pop())
+        for d in (n["deps"] + ([n["from"]] if n.get("from") else [])) if n else []:
+            if d not in seen:
+                seen.add(d)
+                todo.append(d)
+    now = [k for k, n in g["nodes"].items() if n["state"] == "now"]
+    return [k for k in now if k in seen] or now
+
+
 def replay(events):
     """Same rules as replayPlan() in web/graph.js."""
     g = {"title": None, "v": 0, "nodes": {}, "order": [], "topics": [], "angle": None}
@@ -130,9 +143,8 @@ def replay(events):
         elif op == "state" and e.get("id") in g["nodes"]:
             g["nodes"][e["id"]]["state"] = e["state"]
         elif op == "next":
-            for n in g["nodes"].values():
-                if n["state"] == "now":
-                    n["state"] = "done"
+            for k in finishing(g, e.get("id")):
+                g["nodes"][k]["state"] = "done"
             if e.get("id") in g["nodes"]:
                 g["nodes"][e["id"]]["state"] = "now"
         elif op == "out" and e.get("id") in g["nodes"]:
@@ -305,7 +317,7 @@ def main(argv):
         need(g, args[0])
         if o.get("out"):   # outputs belong to the step(s) being finished
             outs = files(csv(o["out"]))
-            for sid in [n["id"] for n in g["nodes"].values() if n["state"] == "now"] or [args[0]]:
+            for sid in finishing(g, args[0]) or [args[0]]:
                 append({"op": "out", "id": sid, "files": outs})
         append({"op": "next", "id": args[0], "note": " ".join(args[1:]) or None})
     elif cmd == "out":
