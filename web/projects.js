@@ -160,7 +160,7 @@ export class Projects {
     } catch (e) {}
     root.innerHTML = `<nav class="pj-rail" aria-label="프로젝트"><div class="pj-list"></div>
         <div class="pj-add"><button class="pj-add-btn" type="button" aria-expanded="false"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>프로젝트 추가</button>
-          <form class="pj-add-form" hidden><label class="pj-add-name">이름<input name="name" maxlength="60" autocomplete="off" placeholder="예: Variant agent"></label>
+          <form class="pj-add-form" hidden><b class="pj-add-title">프로젝트 추가</b><label class="pj-add-name">이름<input name="name" maxlength="60" autocomplete="off" placeholder="예: Variant agent"></label>
             <div class="pj-add-hosts"></div>
             <p class="pj-add-hint">프로젝트 폴더가 있는 서버만 채우면 됩니다. 이 폴더 안에서 돈 세션이 이 프로젝트로 묶입니다. 폴더가 여럿이면 쉼표로 잇습니다.</p>
             <p class="pj-add-err" role="alert" hidden></p>
@@ -324,23 +324,17 @@ export class Projects {
     if (this.rail.dataset.h !== html) { this.rail.innerHTML = html; this.rail.dataset.h = html; }
   }
 
-  // "프로젝트 추가": a name and, per server, the folders; the server appends it to config.ini
+  // "프로젝트 추가" and "폴더 고치기": a name and, per server, the folders; the server writes config.ini
   bindAdd() {
-    const box = this.root.querySelector(".pj-add"), btn = box.querySelector(".pj-add-btn"), form = box.querySelector("form");
+    const box = this.root.querySelector(".pj-add"), btn = box.querySelector(".pj-add-btn"), form = this.addForm = box.querySelector("form");
     const err = form.querySelector(".pj-add-err"), hostsBox = form.querySelector(".pj-add-hosts");
-    const close = () => { form.hidden = true; btn.hidden = false; btn.setAttribute("aria-expanded", "false"); err.hidden = true; form.reset(); };
-    btn.addEventListener("click", () => {
-      // a folder of an existing project on each server hints at where projects live there
-      const near = h => { const f = this.projects.map(p => p.folders?.[h]?.[0]).find(Boolean); return f ? f.replace(/[\\/][^\\/]*$/, "") + (f.includes("\\") ? "\\…" : "/…") : ""; };
-      hostsBox.innerHTML = (this.st?.hosts || []).map(h => `<label>${esc(h.name)}<input data-host="${esc(h.name)}" autocomplete="off" spellcheck="false" placeholder="${esc(near(h.name) || "폴더 경로")}"></label>`).join("");
-      form.hidden = false; btn.hidden = true; btn.setAttribute("aria-expanded", "true");
-      form.elements.name.focus();
-    });
+    const close = () => { form.hidden = true; btn.hidden = false; btn.setAttribute("aria-expanded", "false"); err.hidden = true; form.reset(); this.editing = null; };
+    btn.addEventListener("click", () => this.openProjectForm(null));
     form.querySelector("[data-add-cancel]").addEventListener("click", close);
     form.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
     form.addEventListener("submit", async e => {
       e.preventDefault();
-      const name = form.elements.name.value.trim(), folders = {};
+      const name = form.elements.name.value.trim(), folders = {}, was = this.editing;
       for (const i of hostsBox.querySelectorAll("input")) {
         const paths = i.value.split(",").map(s => s.trim()).filter(Boolean);
         if (paths.length) folders[i.dataset.host] = paths;
@@ -349,17 +343,80 @@ export class Projects {
       if (bad) { err.textContent = bad; err.hidden = false; return; }
       form.classList.add("busy");
       try {
-        await this.post("/api/project", { name, folders });
+        const out = await this.post("/api/project", was ? { do: "update", name: was, newName: name, folders } : { name, folders });
         close();
+        if (was && was !== name) this.renameLocal(was, name);
         this.cur = name; this.sel = null;
         try { localStorage.setItem("fw-proj", name); } catch (x) {}
-        this.say(`프로젝트 '${cut(name, 24)}' 추가함 · 폴더를 읽는 중`);
+        this.say(out.note || (was ? `'${cut(name, 24)}' 고침 · 폴더를 다시 읽는 중` : `프로젝트 '${cut(name, 24)}' 추가함 · 폴더를 읽는 중`));
       } catch (x) {
         err.textContent = x.message; err.hidden = false;
       } finally {
         form.classList.remove("busy");
       }
     });
+  }
+
+  openProjectForm(p) {
+    const form = this.addForm, btn = this.root.querySelector(".pj-add-btn"), hostsBox = form.querySelector(".pj-add-hosts");
+    // a folder of an existing project on each server hints at where projects live there
+    const near = h => { const f = this.projects.map(x => x.folders?.[h]?.[0]).find(Boolean); return f ? f.replace(/[\\/][^\\/]*$/, "") + (f.includes("\\") ? "\\…" : "/…") : ""; };
+    this.editing = p ? p.name : null;
+    form.querySelector(".pj-add-title").textContent = p ? `'${cut(p.name, 20)}' 고치기` : "프로젝트 추가";
+    form.querySelector("button[type=submit]").textContent = p ? "저장" : "추가";
+    form.elements.name.value = p ? p.name : "";
+    hostsBox.innerHTML = (this.st?.hosts || []).map(h => `<label>${esc(h.name)}<input data-host="${esc(h.name)}" autocomplete="off" spellcheck="false"
+      value="${esc((p?.folders?.[h.name] || []).join(", "))}" placeholder="${esc(near(h.name) || "폴더 경로")}"></label>`).join("");
+    form.querySelector(".pj-add-err").hidden = true;
+    form.hidden = false; btn.hidden = true; btn.setAttribute("aria-expanded", "true");
+    form.scrollIntoView({ block: "nearest" });
+    (p ? hostsBox.querySelector("input") : form.elements.name).focus();
+  }
+
+  // right-click on a project in the rail (or 프로젝트 고치기 on its box in the map)
+  projectMenu(name) {
+    const p = this.projects.find(x => x.name === name && !x.other);
+    if (!p) return null;
+    const list = this.projects.filter(x => !x.other).map(x => x.name), i = list.indexOf(name);
+    const where = Object.entries(p.folders).map(([h, fs]) => `${h} ${fs.length}`).join(" · ");
+    return { head: name, sub: `폴더 ${where}`, items: [
+      { input: true, icon: "edit", value: name, placeholder: "프로젝트 이름", hint: "이름 바꾸기",
+        submit: v => { if (v && v !== name) this.renameProject(p, v); } },
+      { label: "폴더 고치기", icon: "folder", run: () => this.openProjectForm(p) },
+      "-",
+      { label: "위로 옮기기", icon: "up", disabled: i <= 0, run: () => this.moveProject(name, i - 1) },
+      { label: "아래로 옮기기", icon: "down", disabled: i >= list.length - 1, run: () => this.moveProject(name, i + 1) },
+      "-",
+      { label: "목록에서 빼기", icon: "trash", danger: true, run: () => this.removeProject(p) }] };
+  }
+
+  renameProject(p, to) {
+    this.post("/api/project", { do: "update", name: p.name, newName: to, folders: p.folders })
+      .then(out => { this.renameLocal(p.name, to); this.paint(true); this.say(out.note || `'${cut(p.name, 16)}' 을 '${cut(to, 16)}' 로 바꿈`); },
+            e => this.fail(e.message));
+  }
+
+  removeProject(p) {
+    this.post("/api/project", { do: "delete", name: p.name })
+      .then(() => {
+        if (this.cur === p.name) this.cur = null;
+        this.say(`'${cut(p.name, 20)}' 를 목록에서 뺌 · 폴더와 세션은 그대로`, () =>
+          this.post("/api/project", { name: p.name, folders: p.folders }).then(() => this.say("되돌림"), e => this.fail(e.message)));
+      }, e => this.fail(e.message));
+  }
+
+  // what this browser keeps under the project's name (order, chosen project, map view, moved boxes) follows a rename
+  renameLocal(from, to) {
+    const swap = o => { if (o && from in o) { o[to] = o[from]; delete o[from]; } };
+    swap(this.views); swap(this.pos);
+    if (this.cur === from) this.cur = to;
+    this.drawn.delete(from);
+    this.saveView();
+    saveOrder(savedOrder().map(n => n === from ? to : n));
+    try {
+      if (localStorage.getItem("fw-proj") === from) localStorage.setItem("fw-proj", to);
+      if (localStorage.getItem("fw-todo-proj") === from) localStorage.setItem("fw-todo-proj", to);
+    } catch (e) {}
   }
 
   // a box whose name or line does not fit opens out over the map while the pointer rests on it
@@ -395,7 +452,7 @@ export class Projects {
   // drag a project up or down the rail (or Alt+arrow on the focused one) to reorder; "그 밖의 세션" stays last
   bindRailDrag() {
     const names = () => this.projects.filter(p => !p.other).map(p => p.name);
-    const move = (name, to) => {
+    const move = this.moveProject = (name, to) => {
       const list = names().filter(n => n !== name);
       list.splice(Math.max(0, Math.min(to, list.length)), 0, name);
       saveOrder(list);
@@ -440,8 +497,19 @@ export class Projects {
       this.rail.querySelector(".dragging")?.classList.remove("dragging");
       this.dragProj = null;
     });
+    this.rail.addEventListener("contextmenu", e => {
+      const b = e.target.closest(".pj-p[draggable]");
+      if (!b) return;
+      e.preventDefault();
+      this.openMenu(b, e.clientX, e.clientY, this.projectMenu(b.dataset.proj));
+    });
     this.rail.addEventListener("keydown", e => {
       const b = e.target.closest(".pj-p[draggable]");
+      if (b && (e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey))) {
+        e.preventDefault();
+        const r = b.getBoundingClientRect();
+        return this.openMenu(b, r.left + 24, r.bottom - 4, this.projectMenu(b.dataset.proj));
+      }
       if (!b || !e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
       e.preventDefault();
       move(b.dataset.proj, names().indexOf(b.dataset.proj) + (e.key === "ArrowUp" ? -1 : 1));
@@ -1301,6 +1369,8 @@ export class Projects {
     }
     if (key === "p") {
       return { head: M.p.name, items: [
+        ...(M.p.other ? [] : [{ label: "프로젝트 이름·폴더 고치기", icon: "edit", keep: true,
+          run: () => this.openMenu(nd, this.menuAt.x, this.menuAt.y, this.projectMenu(M.p.name)) }, "-"]),
         { label: this.showHidden ? "숨긴 항목 감추기" : `숨긴 항목 보기${M.hiddenN ? ` (${M.hiddenN})` : ""}`, icon: this.showHidden ? "hide" : "show",
           disabled: !M.hiddenN && !this.showHidden, run: () => { this.showHidden = !this.showHidden; this.paint(true); } },
         { label: this.showEnded ? "꺼진 세션 감추기" : `꺼진 세션 보기${M.endedN ? ` (${M.endedN})` : ""}`, icon: this.showEnded ? "hide" : "show",
@@ -1341,7 +1411,9 @@ export class Projects {
       flow: "M2.5 8h3l2-4 2 8 2-4h2", fold: "M4 6l4 4 4-4", copy: "M5.5 5.5h7v7h-7zM3.5 10.5v-7h7",
       ask: "M6 6.2a2 2 0 1 1 2.6 1.9c-.4.2-.6.5-.6 1v.6M8 11.5v.2", todo: "M3.5 4.5h1M3.5 8h1M3.5 11.5h1M6.5 4.5h6M6.5 8h6M6.5 11.5h6",
       hide: "M2.5 8s2-4 5.5-4 5.5 4 5.5 4-2 4-5.5 4-5.5-4-5.5-4zM3.5 12.5l9-9", show: "M2.5 8s2-4 5.5-4 5.5 4 5.5 4-2 4-5.5 4-5.5-4-5.5-4zM8 6.5a1.5 1.5 0 1 1 0 3a1.5 1.5 0 1 1 0-3",
-      fit: "M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3", theme: "M2.5 5.5l5.5-3 5.5 3-5.5 3zM2.5 8.5l5.5 3 5.5-3M2.5 11l5.5 3 5.5-3" };
+      fit: "M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3", edit: "M3 13l1-3.5 7-7 2.5 2.5-7 7zM9.5 4l2.5 2.5",
+      folder: "M2.5 4.5h4l1.5 1.5h5.5v6.5h-11z", up: "M8 12.5v-9M4.5 7L8 3.5 11.5 7", down: "M8 3.5v9M4.5 9L8 12.5 11.5 9",
+      trash: "M3.5 4.5h9M6.5 4.5V3h3v1.5M4.5 4.5l.7 8.5h5.6l.7-8.5", theme: "M2.5 5.5l5.5-3 5.5 3-5.5 3zM2.5 8.5l5.5 3 5.5-3M2.5 11l5.5 3 5.5-3" };
     const rows = m.items.map(it => {
       if (it === "-") return `<hr>`;
       if (it.input) {   // a name typed into the menu: Enter applies it

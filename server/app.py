@@ -247,15 +247,8 @@ STEP_CMD = {"done": "done", "now": "now", "left": "left", "blocked": "block"}
 PROJECT_BAD = re.compile(r"[\[\]\r\n;#]")   # would break the section header or be read as a comment
 
 
-def add_project(cfg, name, folders):
-    """Append a [project:<name>] section to config.ini and reload the project list in place (the server and
-    the scan loops share that list). folders: {host name: [folder, ...]}. Raises ValueError with the reason."""
-    name = str(name or "").strip()
+def _project_rows(cfg, folders):
     hosts = {h["name"] for h in cfg["hosts"]}
-    if not name or len(name) > 60 or PROJECT_BAD.search(name):
-        raise ValueError("이름은 1~60자, [ ] ; # 와 줄바꿈 없이")
-    if name.lower() in {p["name"].lower() for p in cfg["projects"]}:
-        raise ValueError("이미 있는 프로젝트: " + name)
     rows = []
     for host, paths in (folders or {}).items():
         paths = [str(p).strip() for p in (paths if isinstance(paths, list) else [paths]) if str(p).strip()]
@@ -265,14 +258,56 @@ def add_project(cfg, name, folders):
             raise ValueError("없는 호스트: %s" % host)
         if any(len(p) > 500 or "," in p or PROJECT_BAD.search(p) for p in paths):
             raise ValueError("폴더 경로에 쓸 수 없는 글자가 있음 (, ; # [ ] 줄바꿈)")
-        rows.append("%s = %s" % (host, ", ".join(paths)))
+        rows.append((host, paths))
     if not rows:
         raise ValueError("폴더를 하나 이상 적어야 함")
+    return rows
+
+
+def _project_block(lines, name):
+    """[start, end) of the [project:<name>] section: its header to the next section, leaving the blank and
+    comment lines just above that next header (they introduce it)."""
+    head = re.compile(r"^\s*\[\s*project\s*:\s*%s\s*\]\s*$" % re.escape(name), re.I)
+    start = next((i for i, l in enumerate(lines) if head.match(l)), None)
+    if start is None:
+        raise ValueError("config.ini 에 없는 프로젝트: " + name)
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("[")), len(lines))
+    while end > start + 1 and (not lines[end - 1].strip() or lines[end - 1].lstrip()[:1] in (";", "#")):
+        end -= 1
+    return start, end
+
+
+def edit_project(cfg, do, name, folders=None, new_name=None):
+    """Add, change (folders and/or name) or delete a [project:<name>] section of config.ini, then reload the
+    project list in place (the server and the scan loops share that list). Everything else in the file stays
+    as it was. Returns the hosts whose folders to scan now. Raises ValueError with the reason."""
+    name = str(name or "").strip()
+    new_name = str(new_name or name).strip()
+    names = {p["name"].lower() for p in cfg["projects"]}
+    if do == "add" and name.lower() in names:
+        raise ValueError("이미 있는 프로젝트: " + name)
+    if do in ("update", "delete") and name.lower() not in names:
+        raise ValueError("없는 프로젝트: " + name)
+    if do != "delete":
+        if not new_name or len(new_name) > 60 or PROJECT_BAD.search(new_name):
+            raise ValueError("이름은 1~60자, [ ] ; # 와 줄바꿈 없이")
+        if new_name.lower() != name.lower() and new_name.lower() in names:
+            raise ValueError("이미 있는 프로젝트: " + new_name)
+        rows = _project_rows(cfg, folders)
     path = cfg["path"]
     with open(path, encoding="utf-8-sig", newline="") as fh:
         old = fh.read()
     nl = "\r\n" if "\r\n" in old else "\n"
-    new = old.rstrip("\r\n") + nl + nl + nl.join(["[project:%s]" % name] + rows) + nl
+    section = [] if do == "delete" else ["[project:%s]" % new_name] + ["%s = %s" % (h, ", ".join(ps)) for h, ps in rows]
+    if do == "add":
+        new = old.rstrip("\r\n") + nl + nl + nl.join(section) + nl
+    else:
+        lines = old.split(nl)
+        a, b = _project_block(lines, name)
+        if do == "delete":   # take the blank line that separated it along
+            while b < len(lines) and not lines[b].strip() and (a == 0 or not lines[a - 1].strip()):
+                b += 1
+        new = nl.join(lines[:a] + section + lines[b:])
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8", newline="") as fh:
         fh.write(new)
@@ -283,7 +318,11 @@ def add_project(cfg, name, folders):
         with open(path, "w", encoding="utf-8", newline="") as fh:   # leave the file as it was
             fh.write(old)
         raise ValueError("설정 파일을 다시 읽지 못해 되돌림")
-    return [h for h in hosts if any(r.startswith(h + " = ") for r in rows)]
+    return [] if do == "delete" else [h for h, _ in rows]
+
+
+def add_project(cfg, name, folders):
+    return edit_project(cfg, "add", name, folders)
 
 
 SID_RE = re.compile(r"^[0-9A-Za-z-]{8,80}$")
@@ -738,11 +777,13 @@ def make_handler(state, bind="127.0.0.1", cfg=None, wake=None):
                 op = json.loads(self.rfile.read(min(size, MAX_BODY)).decode("utf-8")) if 0 < size <= MAX_BODY else None
             except ValueError:
                 op = None
-            if not isinstance(op, dict) or not cfg or not isinstance(op.get("folders"), dict):
+            do = op.get("do", "add") if isinstance(op, dict) else None
+            if do not in ("add", "update", "delete") or not cfg or (do != "delete" and not isinstance(op.get("folders"), dict)):
                 return reply(400, {"ok": False, "error": "잘못된 요청"})
+            old, new = str(op.get("name") or "").strip(), str(op.get("newName") or op.get("name") or "").strip()
             try:
                 with state.lock:
-                    touched = add_project(cfg, op.get("name"), op["folders"])
+                    touched = edit_project(cfg, do, old, op.get("folders"), op.get("newName"))
                     state.projects = cfg["projects"]
             except ValueError as e:
                 return reply(400, {"ok": False, "error": str(e)})
@@ -751,8 +792,15 @@ def make_handler(state, bind="127.0.0.1", cfg=None, wake=None):
             for h in touched:   # scan the new folders now instead of at the next round
                 if wake and h in wake:
                     wake[h].set()
+            note = None
+            if do == "update" and new != old and cfg["todo"]["host"]:   # questions, to-dos and themes follow the name
+                try:
+                    db = run_todo(cfg, {"do": "rename_project", "from": old, "to": new, "by": socket.gethostname()})
+                    state.set_todo(error=None, t=time.time(), **db)
+                except Exception as e:
+                    note = "질문·할 일 목록의 프로젝트 이름은 못 바꿈: %s" % e
             state.broadcast()
-            return reply(200, {"ok": True, "name": str(op.get("name")).strip()})
+            return reply(200, {"ok": True, "name": new if do != "delete" else old, "note": note})
 
         def _step(self):
             reply = lambda code, obj: self._send(code, "application/json; charset=utf-8", json.dumps(obj, ensure_ascii=False).encode())

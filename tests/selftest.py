@@ -380,6 +380,31 @@ def t_projects(home, env):
         except ValueError:
             bad.append(name)
     ok("프로젝트 추가 거부: 같은 이름·없는 호스트·주석 글자·괄호·빈 폴더", bad == ["a", "B", "C", "D[1]", "E"], bad)
+    app.edit_project(c, "update", "A", {"lab": ["/r/a2"]}, "A2")
+    with open(ini, encoding="utf-8", newline="") as fh:
+        text = fh.read()
+    ok("프로젝트 고치기: 이름·폴더만 바뀌고 자리와 나머지는 그대로",
+       "[project:A2]\r\nlab = /r/a2\r\n\r\n[project:새 프로젝트]" in text and "[project:A]" not in text
+       and [p["name"] for p in shared] == ["A2", "새 프로젝트"], repr(text))
+    ini2 = os.path.join(home, "del-proj.ini")
+    head = "[host:local]\ntype = local\n\n[host:lab]\ntype = ssh\nssh = lab\n\n"
+    write(ini2, head + "[project:B]\nlab = /b\n\n; 다음 프로젝트\n[project:C]\nlab = /c\n")
+    c2 = config.load(ini2)
+    app.edit_project(c2, "delete", "B")
+    app.edit_project(c2, "delete", "C")
+    with open(ini2, encoding="utf-8") as fh:
+        text = fh.read()
+    ok("프로젝트 삭제: 그 절만 빠지고 다음 절의 주석·호스트 설정은 남음", text == head + "; 다음 프로젝트\n" and c2["projects"] == [], repr(text))
+    try:
+        app.edit_project(c2, "delete", "B")
+        ok("없는 프로젝트 삭제는 거부", False)
+    except ValueError:
+        ok("없는 프로젝트 삭제는 거부", True)
+    sys.path.insert(0, os.path.join(ROOT, "agent"))
+    import todo
+    db = {"items": [{"id": "Q-1", "project": "A"}, {"id": "Q-2", "project": "Z"}], "sessionThemes": {"s1": {"theme": "t", "project": "A"}}}
+    todo.apply(db, {"do": "rename_project", "from": "A", "to": "A2"})
+    ok("이름 바꾸면 질문·할 일과 테마가 따라감", [i["project"] for i in db["items"]] == ["A2", "Z"] and db["sessionThemes"]["s1"]["project"] == "A2", db)
 
     proj = os.path.join(home, "inv-proj")
     for name in ("P1_tumor.sorted.bam", "P2_tumor.sorted.bam"):

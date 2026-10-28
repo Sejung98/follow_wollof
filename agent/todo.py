@@ -93,6 +93,10 @@ def apply(db, op):
                 themes.pop(i, None)
             else:
                 themes[i] = {"theme": theme, "by": by, "project": op.get("project"), "t": now()}
+    elif do == "rename_project" and op.get("from") and op.get("to"):
+        for x in db["items"] + list(db.get("sessionThemes", {}).values()):
+            if x.get("project") == op["from"]:
+                x["project"] = op["to"]
     elif do == "delete":
         db["items"] = [it for it in db["items"] if it["id"] != op.get("id")]
     elif do == "batch":
@@ -139,7 +143,7 @@ def main():
         if fcntl:
             fcntl.flock(lock, fcntl.LOCK_EX)
         db = load(path)
-        if op.get("do") in ("add", "update", "delete", "import", "batch", "hide", "unhide", "themes"):
+        if op.get("do") in ("add", "update", "delete", "import", "batch", "hide", "unhide", "themes", "rename_project"):
             save(path, apply(db, op))
     sys.stdout.buffer.write((json.dumps(db, ensure_ascii=False) + "\n").encode("utf-8"))
 
