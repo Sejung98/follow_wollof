@@ -244,6 +244,48 @@ def run_todo(cfg, op):
 
 # a step's state from the page's context menu -> the follow.py command that records it in that session's plan
 STEP_CMD = {"done": "done", "now": "now", "left": "left", "blocked": "block"}
+PROJECT_BAD = re.compile(r"[\[\]\r\n;#]")   # would break the section header or be read as a comment
+
+
+def add_project(cfg, name, folders):
+    """Append a [project:<name>] section to config.ini and reload the project list in place (the server and
+    the scan loops share that list). folders: {host name: [folder, ...]}. Raises ValueError with the reason."""
+    name = str(name or "").strip()
+    hosts = {h["name"] for h in cfg["hosts"]}
+    if not name or len(name) > 60 or PROJECT_BAD.search(name):
+        raise ValueError("이름은 1~60자, [ ] ; # 와 줄바꿈 없이")
+    if name.lower() in {p["name"].lower() for p in cfg["projects"]}:
+        raise ValueError("이미 있는 프로젝트: " + name)
+    rows = []
+    for host, paths in (folders or {}).items():
+        paths = [str(p).strip() for p in (paths if isinstance(paths, list) else [paths]) if str(p).strip()]
+        if not paths:
+            continue
+        if host not in hosts:
+            raise ValueError("없는 호스트: %s" % host)
+        if any(len(p) > 500 or "," in p or PROJECT_BAD.search(p) for p in paths):
+            raise ValueError("폴더 경로에 쓸 수 없는 글자가 있음 (, ; # [ ] 줄바꿈)")
+        rows.append("%s = %s" % (host, ", ".join(paths)))
+    if not rows:
+        raise ValueError("폴더를 하나 이상 적어야 함")
+    path = cfg["path"]
+    with open(path, encoding="utf-8-sig", newline="") as fh:
+        old = fh.read()
+    nl = "\r\n" if "\r\n" in old else "\n"
+    new = old.rstrip("\r\n") + nl + nl + nl.join(["[project:%s]" % name] + rows) + nl
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8", newline="") as fh:
+        fh.write(new)
+    os.replace(tmp, path)
+    try:
+        cfg["projects"][:] = config.load(path)["projects"]
+    except config.ConfigError:
+        with open(path, "w", encoding="utf-8", newline="") as fh:   # leave the file as it was
+            fh.write(old)
+        raise ValueError("설정 파일을 다시 읽지 못해 되돌림")
+    return [h for h in hosts if any(r.startswith(h + " = ") for r in rows)]
+
+
 SID_RE = re.compile(r"^[0-9A-Za-z-]{8,80}$")
 STEP_RE = re.compile(r"^[\w.-]{1,60}$")
 
@@ -685,7 +727,32 @@ def make_handler(state, bind="127.0.0.1", cfg=None, wake=None):
                 return self._todo()
             if urlsplit(self.path).path == "/api/step":
                 return self._step()
+            if urlsplit(self.path).path == "/api/project":
+                return self._project()
             self._send(404, "text/plain", b"not found")
+
+        def _project(self):
+            reply = lambda code, obj: self._send(code, "application/json; charset=utf-8", json.dumps(obj, ensure_ascii=False).encode())
+            try:
+                size = int(self.headers.get("Content-Length") or 0)
+                op = json.loads(self.rfile.read(min(size, MAX_BODY)).decode("utf-8")) if 0 < size <= MAX_BODY else None
+            except ValueError:
+                op = None
+            if not isinstance(op, dict) or not cfg or not isinstance(op.get("folders"), dict):
+                return reply(400, {"ok": False, "error": "잘못된 요청"})
+            try:
+                with state.lock:
+                    touched = add_project(cfg, op.get("name"), op["folders"])
+                    state.projects = cfg["projects"]
+            except ValueError as e:
+                return reply(400, {"ok": False, "error": str(e)})
+            except OSError as e:
+                return reply(500, {"ok": False, "error": "config.ini 에 쓰지 못함: %s" % e})
+            for h in touched:   # scan the new folders now instead of at the next round
+                if wake and h in wake:
+                    wake[h].set()
+            state.broadcast()
+            return reply(200, {"ok": True, "name": str(op.get("name")).strip()})
 
         def _step(self):
             reply = lambda code, obj: self._send(code, "application/json; charset=utf-8", json.dumps(obj, ensure_ascii=False).encode())

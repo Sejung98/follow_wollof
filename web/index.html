@@ -652,7 +652,43 @@ html.calm *, html.calm *::before, html.calm *::after { animation: none !importan
 #proj { flex: 1; min-height: 0; display: grid; grid-template-columns: 236px minmax(0, 1fr) 368px; background: var(--bg); }
 body.nav-hidden #proj { grid-template-columns: 0 minmax(0, 1fr) 368px; }
 body.nav-hidden #proj .pj-rail { visibility: hidden; border: 0; }
-.pj-rail { overflow-y: auto; padding: 14px 0; background: var(--panel); border-right: 1px solid var(--line); }
+.pj-rail { overflow-y: auto; padding: 14px 0; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+/* add a project: a quiet line under the list that opens into a short form */
+.pj-add { margin-top: 10px; padding: 8px 14px 4px; border-top: 1px solid var(--line); }
+.pj-add-btn { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 4px; font-size: 13px;
+  color: var(--muted); cursor: pointer; border-radius: 6px; }
+.pj-add-btn:hover { color: var(--ink); }
+.pj-add-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pj-add-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.pj-add-btn[hidden], .pj-add-form[hidden], .pj-add-err[hidden] { display: none; }
+.pj-add-form { display: grid; gap: 9px; padding: 4px 0 6px; }
+.pj-add-form.in, .pj-add-form:not([hidden]) { animation: pjadd .18s var(--ease); }
+@keyframes pjadd { from { opacity: 0; transform: translateY(-4px); } }
+.pj-add-form label { display: grid; gap: 4px; font-size: 11.5px; color: var(--muted); }
+.pj-add-name { font-weight: 500; color: var(--ink) !important; font-size: 12.5px !important; }
+.pj-add-hosts { display: grid; gap: 7px; }
+.pj-add-form input { all: unset; box-sizing: border-box; width: 100%; height: 30px; padding: 0 9px; border-radius: 6px; font-size: 12.5px; color: var(--ink);
+  background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); }
+.pj-add-hosts input { font-family: var(--mono, ui-monospace, monospace); font-size: 11.5px; }
+.pj-add-form input:focus { box-shadow: inset 0 0 0 1px var(--accent); }
+.pj-add-form input::placeholder { color: var(--faint); }
+.pj-add-hint { margin: 0; font-size: 11px; line-height: 1.45; color: var(--faint); }
+.pj-add-err { margin: 0; font-size: 11.5px; color: var(--bad, #d9534f); }
+.pj-add-act { display: flex; gap: 6px; }
+.pj-add-act button { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 6px; font-size: 12.5px; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.pj-add-act button[type="submit"] { color: var(--panel); background: var(--ink); box-shadow: none; }
+.pj-add-act button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pj-add-form.busy { opacity: .6; pointer-events: none; }
+/* a cut-off box name opens out in place while the pointer rests on it */
+.pj-peek { position: fixed; z-index: 55; pointer-events: none; box-sizing: border-box; display: grid; align-content: center; gap: .3em;
+  border-radius: 7px; background: var(--panel); color: var(--ink); line-height: 1.35; overflow-wrap: anywhere;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 55%, var(--line)), 0 12px 30px -10px rgba(0,0,0,.45); }
+.pj-peek[hidden] { display: none; }
+.pj-peek b { font-weight: 500; }
+.pj-peek span { font-size: .85em; color: var(--muted); }
+.pj-peek.in { animation: pjpeek .16s var(--ease); }
+@keyframes pjpeek { from { opacity: .4; clip-path: inset(0 55% 0 0 round 7px); } to { clip-path: inset(0 0 0 0 round 7px); } }
+html.calm .pj-peek.in, html.calm .pj-add-form:not([hidden]) { animation: none; }
 .pj-p { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 11px 18px 12px;
   border-left: 2px solid transparent; cursor: pointer; color: var(--ink); }
 .pj-p:hover { background: color-mix(in srgb, var(--bg) 60%, var(--panel)); }

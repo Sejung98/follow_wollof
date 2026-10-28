@@ -158,7 +158,13 @@ export class Projects {
       this.pos = JSON.parse(localStorage.getItem("fw-proj-pos") || "{}");
       this.showEnded = localStorage.getItem("fw-proj-ended") === "1";
     } catch (e) {}
-    root.innerHTML = `<nav class="pj-rail" aria-label="프로젝트"></nav>
+    root.innerHTML = `<nav class="pj-rail" aria-label="프로젝트"><div class="pj-list"></div>
+        <div class="pj-add"><button class="pj-add-btn" type="button" aria-expanded="false"><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>프로젝트 추가</button>
+          <form class="pj-add-form" hidden><label class="pj-add-name">이름<input name="name" maxlength="60" autocomplete="off" placeholder="예: Variant agent"></label>
+            <div class="pj-add-hosts"></div>
+            <p class="pj-add-hint">프로젝트 폴더가 있는 서버만 채우면 됩니다. 이 폴더 안에서 돈 세션이 이 프로젝트로 묶입니다. 폴더가 여럿이면 쉼표로 잇습니다.</p>
+            <p class="pj-add-err" role="alert" hidden></p>
+            <div class="pj-add-act"><button type="submit">추가</button><button type="button" data-add-cancel>취소</button></div></form></div></nav>
       <section class="pj-stage"><div class="pj-head"></div>
         <div class="pj-tree"><svg class="pj-svg" role="img"></svg>
           <div class="pj-find"><label><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
@@ -169,7 +175,7 @@ export class Projects {
           <button data-zoom="one" class="pj-zl" title="원래 크기">100%</button><button data-zoom="reset" title="옮긴 상자를 제자리로">정렬</button></div>
         <div class="pj-scrim"></div><div class="pj-win" role="dialog" aria-modal="true" hidden></div></section>
       <aside class="pj-insp"></aside>`;
-    this.rail = root.querySelector(".pj-rail");
+    this.rail = root.querySelector(".pj-list");
     this.head = root.querySelector(".pj-head");
     this.treeBox = root.querySelector(".pj-tree");
     this.svg = root.querySelector(".pj-svg");
@@ -179,6 +185,8 @@ export class Projects {
     this.scrim = root.querySelector(".pj-scrim");
     root.addEventListener("click", e => this.click(e));
     this.bindRailDrag();
+    this.bindAdd();
+    this.bindPeek();
     this.svg.addEventListener("dblclick", e => { const n = e.target.closest("[data-sel]"); if (n) this.openFlowAt(n.dataset.sel, n); });
     this.bindCanvas();
     this.scrim.addEventListener("click", () => this.closeCat());
@@ -314,6 +322,74 @@ export class Projects {
         <span class="live">${run ? `<i class="dot run"></i>실행 중 ${run}` : ""}${wait ? `<i class="dot wait"></i>입력 대기 ${wait}` : ""}${!run && !wait ? `<span class="quiet">세션 ${ss.length}개 · 쉬는 중</span>` : ""}</span></button>`;
     }).join("");
     if (this.rail.dataset.h !== html) { this.rail.innerHTML = html; this.rail.dataset.h = html; }
+  }
+
+  // "프로젝트 추가": a name and, per server, the folders; the server appends it to config.ini
+  bindAdd() {
+    const box = this.root.querySelector(".pj-add"), btn = box.querySelector(".pj-add-btn"), form = box.querySelector("form");
+    const err = form.querySelector(".pj-add-err"), hostsBox = form.querySelector(".pj-add-hosts");
+    const close = () => { form.hidden = true; btn.hidden = false; btn.setAttribute("aria-expanded", "false"); err.hidden = true; form.reset(); };
+    btn.addEventListener("click", () => {
+      // a folder of an existing project on each server hints at where projects live there
+      const near = h => { const f = this.projects.map(p => p.folders?.[h]?.[0]).find(Boolean); return f ? f.replace(/[\\/][^\\/]*$/, "") + (f.includes("\\") ? "\\…" : "/…") : ""; };
+      hostsBox.innerHTML = (this.st?.hosts || []).map(h => `<label>${esc(h.name)}<input data-host="${esc(h.name)}" autocomplete="off" spellcheck="false" placeholder="${esc(near(h.name) || "폴더 경로")}"></label>`).join("");
+      form.hidden = false; btn.hidden = true; btn.setAttribute("aria-expanded", "true");
+      form.elements.name.focus();
+    });
+    form.querySelector("[data-add-cancel]").addEventListener("click", close);
+    form.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      const name = form.elements.name.value.trim(), folders = {};
+      for (const i of hostsBox.querySelectorAll("input")) {
+        const paths = i.value.split(",").map(s => s.trim()).filter(Boolean);
+        if (paths.length) folders[i.dataset.host] = paths;
+      }
+      const bad = !name ? "이름을 적어 주세요" : !Object.keys(folders).length ? "폴더를 하나 이상 적어 주세요" : "";
+      if (bad) { err.textContent = bad; err.hidden = false; return; }
+      form.classList.add("busy");
+      try {
+        await this.post("/api/project", { name, folders });
+        close();
+        this.cur = name; this.sel = null;
+        try { localStorage.setItem("fw-proj", name); } catch (x) {}
+        this.say(`프로젝트 '${cut(name, 24)}' 추가함 · 폴더를 읽는 중`);
+      } catch (x) {
+        err.textContent = x.message; err.hidden = false;
+      } finally {
+        form.classList.remove("busy");
+      }
+    });
+  }
+
+  // a box whose name or line does not fit opens out over the map while the pointer rests on it
+  bindPeek() {
+    const peek = this.peek = document.createElement("div");
+    peek.className = "pj-peek";
+    peek.hidden = true;
+    this.root.appendChild(peek);
+    let timer = null, on = null;
+    const hide = this.hidePeek = () => { clearTimeout(timer); on = null; peek.hidden = true; peek.classList.remove("in"); };
+    this.svg.addEventListener("pointerover", e => {
+      const nd = e.target.closest(".nd[data-tt]");
+      if (!nd || nd === on) return;
+      hide();
+      if (this.drag || ![...nd.querySelectorAll(".nt, .ns")].some(t => t.textContent.endsWith("…"))) return;
+      on = nd;
+      timer = setTimeout(() => {
+        if (!nd.isConnected || this.drag || (this.menu && !this.menu.hidden)) return;
+        const r = nd.getBoundingClientRect(), z = this.view.z, dx = (+nd.dataset.tx || 0) * z;
+        peek.innerHTML = `<b>${esc(nd.dataset.tt)}</b>${[nd.dataset.ts, nd.dataset.ts2].filter(Boolean).map(s => `<span>${esc(s)}</span>`).join("")}`;
+        Object.assign(peek.style, { left: `${r.left + dx - 9 * z}px`, top: `${r.top}px`, minWidth: `${r.right - r.left - dx + 9 * z}px`,
+          minHeight: `${r.height}px`, maxWidth: `${Math.max(r.width, 440 * z)}px`, fontSize: `${13 * z}px`, padding: `${7 * z}px ${12 * z}px ${8 * z}px ${9 * z}px` });
+        peek.hidden = false;
+        requestAnimationFrame(() => peek.classList.add("in"));
+      }, 160);
+    });
+    this.svg.addEventListener("pointerout", e => { if (on && !on.contains(e.relatedTarget)) hide(); });
+    this.treeBox.addEventListener("pointerdown", hide);
+    this.treeBox.addEventListener("wheel", hide, { passive: true });
+    this.svg.addEventListener("contextmenu", hide);
   }
 
   // drag a project up or down the rail (or Alt+arrow on the focused one) to reorder; "그 밖의 세션" stays last
@@ -777,10 +853,11 @@ export class Projects {
     const ic = small ? 20 : 26, ix = x + (small ? 6 : 9), iy = y + (small ? (h - ic) / 2 : 10), tx = ix + ic + (small ? 8 : 10);
     const room = x + w - tx - (chevron != null ? 30 : 10) - (small && sub ? textW(sub, 11) + 12 : 0);
     const ty = small ? y + h / 2 + 4.5 : y + (sub2 ? 22 : sub ? h / 2 - 3 : h / 2 + 4.5);
-    return `<g class="nd ${cls}" ${attrs}${key ? ` data-key="${esc(key)}"` : ""} tabindex="0"><rect class="box" x="${f1(x)}" y="${f1(y)}" width="${w}" height="${h}" rx="${small ? 5 : 7}"/>
+    const full = `data-tt="${esc(title)}" data-tx="${f1(tx - x)}"${sub ? ` data-ts="${esc(sub)}"` : ""}${sub2 ? ` data-ts2="${esc(sub2)}"` : ""} aria-label="${esc(title)}"`;
+    return `<g class="nd ${cls}" ${attrs}${key ? ` data-key="${esc(key)}"` : ""} ${full} tabindex="0"><rect class="box" x="${f1(x)}" y="${f1(y)}" width="${w}" height="${h}" rx="${small ? 5 : 7}"/>
       <rect class="ic" x="${ix}" y="${f1(iy)}" width="${ic}" height="${ic}" rx="${small ? 4 : 6}"/>
       <path class="icp" d="${ICON[icon]}" transform="translate(${f1(ix + (ic - 16) / 2)} ${f1(iy + (ic - 16) / 2)})"/>
-      <text class="nt${small ? " sm" : ""}" x="${f1(tx)}" y="${f1(ty)}">${esc(fit(title, room, small ? 12.5 : 13))}<title>${esc(title)}</title></text>
+      <text class="nt${small ? " sm" : ""}" x="${f1(tx)}" y="${f1(ty)}">${esc(fit(title, room, small ? 12.5 : 13))}</text>
       ${sub && !small ? `<text class="ns" x="${f1(tx)}" y="${f1(ty + 16)}">${esc(fit(sub, room + 20, 11))}</text>` : ""}
       ${sub2 ? `<text class="ns" x="${f1(tx)}" y="${f1(ty + 31)}">${esc(fit(sub2, room + 20, 11))}</text>` : ""}
       ${sub && small ? `<text class="ns end" x="${x + w - 9}" y="${f1(y + h / 2 + 4)}">${esc(sub)}</text>` : ""}
@@ -797,8 +874,8 @@ export class Projects {
       : st === "more" ? `<path class="sm-more" d="M${cx - 5} ${cy}h.1M${cx} ${cy}h.1M${cx + 5} ${cy}h.1"/>` : `<circle class="sm-left" cx="${cx}" cy="${cy}" r="6.5"/>`;
     const right = since ? since : n ? `${n}개` : outs ? `산출물 ${outs}` : "";
     const room = w - 38 - (right ? textW(right, 11) + 14 : 8);
-    return `<g class="nd task t-${st}" ${attrs}${key ? ` data-key="${esc(key)}"` : ""} tabindex="0"><rect class="box" x="${f1(x)}" y="${f1(y)}" width="${w}" height="${h}" rx="5"/>${mark}
-      <text class="nt sm" x="${x + 30}" y="${f1(cy + 4.5)}">${esc(fit(title, room, 12.5))}<title>${esc(title)}</title></text>
+    return `<g class="nd task t-${st}" ${attrs}${key ? ` data-key="${esc(key)}"` : ""} data-tt="${esc(title)}" data-tx="30" aria-label="${esc(title)}" tabindex="0"><rect class="box" x="${f1(x)}" y="${f1(y)}" width="${w}" height="${h}" rx="5"/>${mark}
+      <text class="nt sm" x="${x + 30}" y="${f1(cy + 4.5)}">${esc(fit(title, room, 12.5))}</text>
       ${right ? `<text class="ns end" x="${x + w - 9}" y="${f1(cy + 4)}">${esc(right)}</text>` : ""}</g>`;
   }
 

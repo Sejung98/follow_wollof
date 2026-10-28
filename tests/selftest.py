@@ -363,6 +363,23 @@ def t_projects(home, env):
     write(probe, "import sys\nprint(len(sys.argv[1]))\n")
     r = subprocess.run([PY, "-"], input=app.script_with_arg(probe, "A" * 20000), stdout=subprocess.PIPE)
     ok("긴 인자도 stdin 으로 그대로 (ssh 명령줄 8KB 제한)", r.stdout.strip() == b"20000", r.stdout)
+    ini = os.path.join(home, "add-proj.ini")
+    write(ini, "[host:local]\r\ntype = local\r\n\r\n[host:lab]\r\ntype = ssh\r\nssh = lab\r\n\r\n[project:A]\r\nlab = /r/a\r\n", newline="")
+    c = config.load(ini)
+    shared = c["projects"]
+    app.add_project(c, " 새 프로젝트 ", {"lab": ["/r/07_var", "/r/x y"], "local": []})
+    with open(ini, encoding="utf-8", newline="") as fh:
+        text = fh.read()
+    ok("프로젝트 추가: config.ini 에 섹션 + 목록 갱신 (같은 목록 객체, CRLF 유지)",
+       text.endswith("[project:새 프로젝트]\r\nlab = /r/07_var, /r/x y\r\n") and c["projects"] is shared
+       and [p["name"] for p in shared] == ["A", "새 프로젝트"] and "\n" not in text.replace("\r\n", ""), repr(text[-80:]))
+    bad = []
+    for name, folders in (("a", {"lab": ["/r/z"]}), ("B", {"nope": ["/r"]}), ("C", {"lab": ["/r;x"]}), ("D[1]", {"lab": ["/r"]}), ("E", {})):
+        try:
+            app.add_project(c, name, folders)
+        except ValueError:
+            bad.append(name)
+    ok("프로젝트 추가 거부: 같은 이름·없는 호스트·주석 글자·괄호·빈 폴더", bad == ["a", "B", "C", "D[1]", "E"], bad)
 
     proj = os.path.join(home, "inv-proj")
     for name in ("P1_tumor.sorted.bam", "P2_tumor.sorted.bam"):
